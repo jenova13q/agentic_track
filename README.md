@@ -1,4 +1,4 @@
-﻿# Story Consistency Agent
+﻿# Story Consistency Agent | AI writer assistant | StoryWorld Agent | Narrative Consistency Agent
 
 ## Что за задача, для кого и какая боль сейчас
 
@@ -43,3 +43,29 @@ PoC позиционируется именно как агентная сист
 - `README.md` — краткое описание задачи, PoC и ограничений;
 - `docs/product-proposal.md` — продуктовое и техническое обоснование;
 - `docs/governance.md` — риски, защиты и правила работы с данными.
+
+## Простая архитектурная диаграмма
+
+```mermaid
+flowchart TD
+    A[Author writes scene] --> B[Text Ingestion]
+    B --> C[Entity Extraction]
+    C --> D[Story Memory]
+
+    D --> E[Consistency Agent]
+
+    E --> F1[Character Tool]
+    E --> F2[Timeline Tool]
+    E --> F3[Story Search Tool]
+    E --> F4[External Research Tool]
+
+    F1 --> G[Conflict Detection]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+
+    G --> H[Explanation & Suggestions]
+    H --> I[Author Feedback]
+    I --> J[Update Story Memory]
+    J --> D
+```
