@@ -51,24 +51,25 @@ PoC позиционируется именно как агентная сист
 
 ```mermaid
 flowchart TD
-    A[Author writes scene] --> B[Text Ingestion]
-    B --> C[Entity Extraction]
-    C --> D[Story Memory]
+    A[Author submits scene] --> B[API / Backend]
+    B --> C[Agent Orchestrator]
 
-    D --> E[Consistency Agent]
+    C --> D[Retriever]
+    C --> E[Story Memory]
+    C --> F[Tools Layer]
 
-    E --> F1[Character Tool]
-    E --> F2[Timeline Tool]
-    E --> F3[Story Search Tool]
-    E --> F4[External Research Tool]
+    D --> C
+    E --> C
+    F --> C
 
-    F1 --> G[Conflict Detection]
-    F2 --> G
-    F3 --> G
-    F4 --> G
+    F --> F1[Character Timeline and Story Tools]
+    F --> F2[External Fact Check]
 
-    G --> H[Explanation & Suggestions]
-    H --> I[Author Feedback]
-    I --> J[Update Story Memory]
-    J --> D
+    C --> G[Explanation and Confidence]
+    C --> H[Pending Memory Update]
+
+    G --> I[Author Review]
+    H --> I
+    I --> J[Confirm Memory Update]
+    J --> E
 ```
