@@ -3,8 +3,10 @@ from __future__ import annotations
 from uuid import uuid4
 
 from app.agent.llm import LLMDecisionEngine
+from app.core.config import settings
 from app.memory.store import StoryStore
 from app.models.schemas import (
+    AgentWorkingState,
     AnalyzeSceneRequest,
     AnalyzeSceneResponse,
     IngestStoryRequest,
@@ -57,6 +59,12 @@ class DemoOrchestrator:
         if story is None:
             raise ValueError("story_not_found")
 
+        working_state = AgentWorkingState(
+            request_id=str(uuid4()),
+            story_id=story.story_id,
+            current_goal=payload.question or "Проверить сцену на консистентность с памятью истории.",
+        )
+
         tool_plan, planning_reason = self.llm.choose_tool_plan(
             story_title=story.title,
             scene_text=payload.scene_text,
@@ -66,6 +74,7 @@ class DemoOrchestrator:
 
         tool_traces: list[ToolTrace] = [
             ToolTrace(
+                step_index=0,
                 tool_name="tool_planner",
                 success=True,
                 detail=f"{planning_reason}: {', '.join(tool_plan)}",
@@ -78,6 +87,16 @@ class DemoOrchestrator:
         timeline_records: list[MemoryRecord] = []
 
         for tool_name in tool_plan:
+            if working_state.current_step >= settings.max_agent_steps:
+                working_state.stop_reason = "max_agent_steps_exceeded"
+                break
+            if working_state.tool_calls >= settings.max_tool_calls:
+                working_state.stop_reason = "max_tool_calls_exceeded"
+                break
+
+            previous_evidence_count = len(working_state.evidence_refs)
+            previous_memory_count = len(memory_records) + len(character_records) + len(timeline_records)
+
             if tool_name == "search_story_chunks":
                 chunk_refs, trace = self.tools.search_story_chunks(story, payload.scene_text)
             elif tool_name == "query_story_memory":
@@ -88,7 +107,26 @@ class DemoOrchestrator:
                 timeline_records, trace = self.tools.get_timeline_window(story, payload.scene_text)
             else:
                 continue
+
+            working_state.current_step += 1
+            working_state.tool_calls += 1
+            working_state.tool_history.append(tool_name)
+            trace.step_index = working_state.current_step
             tool_traces.append(trace)
+
+            for ref in chunk_refs:
+                if ref not in working_state.evidence_refs:
+                    working_state.evidence_refs.append(ref)
+
+            current_memory_count = len(memory_records) + len(character_records) + len(timeline_records)
+            if len(working_state.evidence_refs) == previous_evidence_count and current_memory_count == previous_memory_count:
+                working_state.no_new_evidence_steps += 1
+            else:
+                working_state.no_new_evidence_steps = 0
+
+            if working_state.no_new_evidence_steps >= 2:
+                working_state.stop_reason = "no_new_evidence"
+                break
 
         combined_memory: list[MemoryRecord] = []
         seen_ids: set[str] = set()
@@ -99,13 +137,17 @@ class DemoOrchestrator:
             combined_memory.append(record)
 
         issues, proposed, issue_type = detect_conflicts(payload.scene_text, combined_memory)
+        working_state.findings = issues
 
         pending_update_id = None
-        if proposed:
+        if proposed and working_state.tool_calls < settings.max_tool_calls:
             pending_update, trace = self.tools.propose_memory_update(
                 summary="Memory updates proposed from scene analysis",
                 changes=proposed,
             )
+            working_state.current_step += 1
+            working_state.tool_calls += 1
+            trace.step_index = working_state.current_step
             tool_traces.append(trace)
             if pending_update is not None:
                 stored = self.store.add_pending_update(story.story_id, pending_update)
@@ -121,19 +163,25 @@ class DemoOrchestrator:
         orchestrator_mode = "llm" if self.llm.enabled else "heuristic"
 
         if issues:
+            working_state.confidence = 0.8
+            working_state.stop_reason = working_state.stop_reason or "conflict_detected"
             return AnalyzeSceneResponse(
                 status="conflict",
                 issue_type=issue_type if issue_type != "none" else "mixed",
                 explanation=llm_explanation or " ".join(issues),
-                confidence=0.8,
-                evidence_refs=chunk_refs[:3],
-                stop_reason="conflict_detected",
+                confidence=working_state.confidence,
+                evidence_refs=working_state.evidence_refs[:3],
+                stop_reason=working_state.stop_reason,
                 orchestrator_mode=orchestrator_mode,
+                agent_step_count=working_state.current_step,
+                tool_call_count=working_state.tool_calls,
                 tool_traces=tool_traces,
                 memory_update_proposal_id=pending_update_id,
             )
 
-        if not chunk_refs and not combined_memory:
+        if not working_state.evidence_refs and not combined_memory:
+            working_state.confidence = 0.35
+            working_state.stop_reason = "insufficient_evidence"
             return AnalyzeSceneResponse(
                 status="uncertain",
                 issue_type="none",
@@ -141,10 +189,12 @@ class DemoOrchestrator:
                     llm_explanation
                     or "Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены."
                 ),
-                confidence=0.35,
+                confidence=working_state.confidence,
                 evidence_refs=[],
-                stop_reason="insufficient_evidence",
+                stop_reason=working_state.stop_reason,
                 orchestrator_mode=orchestrator_mode,
+                agent_step_count=working_state.current_step,
+                tool_call_count=working_state.tool_calls,
                 tool_traces=tool_traces,
                 memory_update_proposal_id=pending_update_id,
             )
@@ -153,14 +203,18 @@ class DemoOrchestrator:
         if pending_update_id is not None:
             explanation += " При этом найдено новое знание, вынесенное в pending update."
 
+        working_state.confidence = 0.72
+        working_state.stop_reason = working_state.stop_reason or "evidence_threshold_met"
         return AnalyzeSceneResponse(
             status="no_conflict",
             issue_type="none",
             explanation=llm_explanation or explanation,
-            confidence=0.72,
-            evidence_refs=chunk_refs[:3],
-            stop_reason="evidence_threshold_met",
+            confidence=working_state.confidence,
+            evidence_refs=working_state.evidence_refs[:3],
+            stop_reason=working_state.stop_reason,
             orchestrator_mode=orchestrator_mode,
+            agent_step_count=working_state.current_step,
+            tool_call_count=working_state.tool_calls,
             tool_traces=tool_traces,
             memory_update_proposal_id=pending_update_id,
         )

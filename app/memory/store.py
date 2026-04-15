@@ -97,3 +97,18 @@ class StoryStore:
             return update
 
         return None
+
+    def reject_update(self, story_id: str, update_id: str) -> PendingUpdate | None:
+        story = self.load_story_data(story_id)
+        if story is None:
+            return None
+
+        for update in story.pending_updates:
+            if update.id != update_id or update.status != "pending":
+                continue
+
+            update.status = "rejected"
+            self.save_story(story)
+            return update
+
+        return None

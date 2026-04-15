@@ -73,6 +73,8 @@ class StoryApiTests(unittest.TestCase):
         self.assertIn(payload["issue_type"], {"fact", "character", "mixed"})
         self.assertTrue(payload["tool_traces"])
         self.assertIn(payload["orchestrator_mode"], {"heuristic", "llm"})
+        self.assertGreaterEqual(payload["agent_step_count"], 1)
+        self.assertGreaterEqual(payload["tool_call_count"], 1)
 
     def test_analyze_scene_creates_pending_update_and_confirm_promotes_it(self) -> None:
         story_id = self._ingest_story(
@@ -108,6 +110,32 @@ class StoryApiTests(unittest.TestCase):
         ]
         self.assertTrue(confirmed_facts)
 
+    def test_reject_pending_update_marks_it_rejected(self) -> None:
+        story_id = self._ingest_story(
+            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        )
+
+        analyze_response = self.client.post(
+            f"/stories/{story_id}/analyze",
+            json={"scene_text": "Day 2. Boris lives in Samarkand. Boris is kind."},
+        )
+        self.assertEqual(analyze_response.status_code, 200)
+        proposal_id = analyze_response.json()["memory_update_proposal_id"]
+        self.assertIsNotNone(proposal_id)
+
+        reject_response = self.client.post(
+            f"/stories/{story_id}/pending-updates/{proposal_id}/reject"
+        )
+        self.assertEqual(reject_response.status_code, 200)
+        self.assertEqual(reject_response.json()["status"], "rejected")
+
+        story_after_reject = self.client.get(f"/stories/{story_id}").json()
+        rejected = [
+            update for update in story_after_reject["pending_updates"] if update["id"] == proposal_id
+        ]
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0]["status"], "rejected")
+
     def test_analyze_scene_returns_uncertain_when_memory_is_irrelevant(self) -> None:
         story_id = self._ingest_story(
             text="Day 1. Anna lives in Tashkent. Anna is brave."
@@ -122,6 +150,7 @@ class StoryApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "uncertain")
         self.assertEqual(payload["stop_reason"], "insufficient_evidence")
+        self.assertGreaterEqual(payload["agent_step_count"], 1)
 
     def _ingest_story(self, text: str) -> str:
         response = self.client.post(

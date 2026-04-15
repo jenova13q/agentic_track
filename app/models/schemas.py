@@ -75,9 +75,25 @@ class StoryData(BaseModel):
 
 
 class ToolTrace(BaseModel):
+    step_index: int | None = None
     tool_name: str
     success: bool
     detail: str
+    error_code: str | None = None
+
+
+class AgentWorkingState(BaseModel):
+    request_id: str
+    story_id: str
+    current_goal: str
+    current_step: int = 0
+    tool_calls: int = 0
+    evidence_refs: list[str] = Field(default_factory=list)
+    findings: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+    stop_reason: str | None = None
+    no_new_evidence_steps: int = 0
+    tool_history: list[str] = Field(default_factory=list)
 
 
 class AnalyzeSceneResponse(BaseModel):
@@ -88,6 +104,8 @@ class AnalyzeSceneResponse(BaseModel):
     evidence_refs: list[str] = Field(default_factory=list)
     stop_reason: str
     orchestrator_mode: Literal["heuristic", "llm"]
+    agent_step_count: int
+    tool_call_count: int
     tool_traces: list[ToolTrace] = Field(default_factory=list)
     memory_update_proposal_id: str | None = None
 
@@ -97,6 +115,12 @@ class ConfirmUpdateResponse(BaseModel):
     story_id: str
     update_id: str
     promoted_memory_ids: list[str]
+
+
+class RejectUpdateResponse(BaseModel):
+    status: Literal["rejected"]
+    story_id: str
+    update_id: str
 
 
 class StoryResponse(BaseModel):

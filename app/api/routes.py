@@ -9,6 +9,7 @@ from app.models.schemas import (
     HealthResponse,
     IngestStoryRequest,
     IngestStoryResponse,
+    RejectUpdateResponse,
     StoryListResponse,
     StoryResponse,
 )
@@ -62,4 +63,19 @@ def confirm_memory_update(story_id: str, update_id: str) -> ConfirmUpdateRespons
         story_id=story_id,
         update_id=update_id,
         promoted_memory_ids=update.promoted_memory_ids,
+    )
+
+
+@router.post(
+    "/stories/{story_id}/pending-updates/{update_id}/reject",
+    response_model=RejectUpdateResponse,
+)
+def reject_memory_update(story_id: str, update_id: str) -> RejectUpdateResponse:
+    update = store.reject_update(story_id=story_id, update_id=update_id)
+    if update is None:
+        raise HTTPException(status_code=404, detail="pending_update_not_found")
+    return RejectUpdateResponse(
+        status="rejected",
+        story_id=story_id,
+        update_id=update_id,
     )
