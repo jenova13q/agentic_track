@@ -35,7 +35,7 @@ class Settings:
     max_agent_steps: int = 4
     max_tool_calls: int = 6
     max_external_calls: int = 1
-    llm_model: str = os.getenv("LLM_MODEL", "gpt-4.1-mini")
+    llm_model: str = os.getenv("LLM_MODEL", "gpt-5.4-mini")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "demo-token-overlap")
     llm_api_key: str | None = first_env("LLM_API_KEY", "OPENAI_API_KEY", "openai_api_key")
     openai_api_key: str | None = first_env("OPENAI_API_KEY", "openai_api_key", "openai_api_key_")
