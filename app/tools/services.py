@@ -59,7 +59,7 @@ class ToolService:
         character_records = [
             record
             for record in story.memory
-            if record.type == "character" and record.attributes.get("name") in names
+            if record.attributes.get("name") in names
         ]
         return character_records, ToolTrace(
             tool_name="get_character_profile",
