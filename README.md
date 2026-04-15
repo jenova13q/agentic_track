@@ -46,6 +46,7 @@ PoC позиционируется именно как агентная сист
 - `docs/system-design.md` — архитектурные решения, workflow, state, tools и guardrails;
 - `docs/diagrams/` — набор системных диаграмм для Milestone 2;
 - `docs/specs/` — короткие технические спецификации по ключевым модулям.
+- `docs/implementation-plan.md` — чеклист реализации MVP с checkpoint-ами.
 
 ## Простая архитектурная диаграмма
 
@@ -73,3 +74,30 @@ flowchart TD
     I --> J[Confirm Memory Update]
     J --> E
 ```
+
+## MVP Backend
+
+В репозитории есть минимальный backend-каркас для демо:
+- `FastAPI` приложение в `app/`;
+- ingestion истории и новых сцен;
+- простое файловое хранилище story memory в `data/stories/`;
+- bounded demo orchestrator;
+- pending update / confirm flow;
+- request logging middleware.
+
+Основные endpoints:
+- `GET /health`
+- `GET /stories`
+- `POST /stories/ingest`
+- `GET /stories/{story_id}`
+- `POST /stories/{story_id}/analyze`
+- `POST /stories/{story_id}/pending-updates/{update_id}/confirm`
+
+Локальный запуск после установки зависимостей:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Для демо можно использовать подготовленный пример истории:
+- `data/demo-story.txt`
