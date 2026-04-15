@@ -1,5 +1,21 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def load_dotenv(dotenv_path: Path = Path(".env")) -> None:
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+load_dotenv()
 
 
 @dataclass(frozen=True)
@@ -11,6 +27,11 @@ class Settings:
     max_agent_steps: int = 4
     max_tool_calls: int = 6
     max_external_calls: int = 1
+    llm_model: str = os.getenv("LLM_MODEL", "demo-heuristic-orchestrator")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "demo-token-overlap")
+    llm_api_key: str | None = os.getenv("LLM_API_KEY")
+    embedding_api_key: str | None = os.getenv("EMBEDDING_API_KEY")
+    external_research_api_key: str | None = os.getenv("EXTERNAL_RESEARCH_API_KEY")
 
 
 settings = Settings()
