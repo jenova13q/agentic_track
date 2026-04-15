@@ -8,14 +8,17 @@ from app.agent.orchestrator import DemoOrchestrator
 from app.api import routes
 from app.main import app
 from app.memory.store import StoryStore
+from app.observability.service import ObservabilityStore
 
 
 class StoryApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = StoryStore(base_dir=Path(self.temp_dir.name))
+        self.observability = ObservabilityStore(base_dir=Path(self.temp_dir.name) / "telemetry")
         routes.store = self.store
         routes.orchestrator = DemoOrchestrator(store=self.store)
+        routes.observability = self.observability
         routes.orchestrator.llm.openai_api_key = None
         self.client = TestClient(app)
 
@@ -151,6 +154,32 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "uncertain")
         self.assertEqual(payload["stop_reason"], "insufficient_evidence")
         self.assertGreaterEqual(payload["agent_step_count"], 1)
+
+    def test_observability_summary_and_traces_capture_analysis(self) -> None:
+        story_id = self._ingest_story(
+            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        )
+
+        analyze_response = self.client.post(
+            f"/stories/{story_id}/analyze",
+            json={"scene_text": "Day 2. Anna is cowardly."},
+        )
+        self.assertEqual(analyze_response.status_code, 200)
+
+        summary_response = self.client.get("/observability/summary")
+        self.assertEqual(summary_response.status_code, 200)
+        summary = summary_response.json()
+        self.assertEqual(summary["analysis_requests"], 1)
+        self.assertEqual(summary["conflict_count"], 1)
+        self.assertGreaterEqual(summary["average_tool_calls"], 1.0)
+        self.assertIn("conflict_detected", summary["last_stop_reasons"])
+
+        traces_response = self.client.get("/observability/traces")
+        self.assertEqual(traces_response.status_code, 200)
+        traces = traces_response.json()["traces"]
+        self.assertEqual(len(traces), 1)
+        self.assertEqual(traces[0]["event_type"], "analysis")
+        self.assertEqual(traces[0]["status"], "conflict")
 
     def _ingest_story(self, text: str) -> str:
         response = self.client.post(

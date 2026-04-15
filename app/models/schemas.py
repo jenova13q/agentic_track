@@ -140,3 +140,40 @@ class StoryListItem(BaseModel):
 
 class StoryListResponse(BaseModel):
     stories: list[StoryListItem]
+
+
+class AgentTrace(BaseModel):
+    request_id: str
+    story_id: str
+    event_type: Literal["analysis", "confirm_update", "reject_update"]
+    status: str
+    issue_type: str | None = None
+    stop_reason: str | None = None
+    orchestrator_mode: Literal["heuristic", "llm"] | None = None
+    model_name: str | None = None
+    latency_ms: float
+    agent_step_count: int = 0
+    tool_call_count: int = 0
+    evidence_ref_count: int = 0
+    created_pending_update: bool = False
+    update_id: str | None = None
+    tool_traces: list[ToolTrace] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ObservabilitySummaryResponse(BaseModel):
+    total_events: int
+    analysis_requests: int
+    conflict_count: int
+    uncertain_count: int
+    no_conflict_count: int
+    confirmed_updates: int
+    rejected_updates: int
+    average_latency_ms: float
+    average_tool_calls: float
+    average_agent_steps: float
+    last_stop_reasons: list[str] = Field(default_factory=list)
+
+
+class RecentTracesResponse(BaseModel):
+    traces: list[AgentTrace]

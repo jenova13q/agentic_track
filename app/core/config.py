@@ -32,6 +32,7 @@ class Settings:
     api_prefix: str = ""
     data_dir: Path = Path("data")
     stories_dir: Path = Path("data/stories")
+    telemetry_dir: Path = Path("data/telemetry")
     max_agent_steps: int = 4
     max_tool_calls: int = 6
     max_external_calls: int = 1
