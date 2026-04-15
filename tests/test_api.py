@@ -16,6 +16,7 @@ class StoryApiTests(unittest.TestCase):
         self.store = StoryStore(base_dir=Path(self.temp_dir.name))
         routes.store = self.store
         routes.orchestrator = DemoOrchestrator(store=self.store)
+        routes.orchestrator.llm.openai_api_key = None
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
@@ -26,6 +27,7 @@ class StoryApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+        self.assertIn("X-Request-ID", response.headers)
 
     def test_ingest_and_list_story(self) -> None:
         ingest_response = self.client.post(
@@ -70,6 +72,7 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "conflict")
         self.assertIn(payload["issue_type"], {"fact", "character", "mixed"})
         self.assertTrue(payload["tool_traces"])
+        self.assertIn(payload["orchestrator_mode"], {"heuristic", "llm"})
 
     def test_analyze_scene_creates_pending_update_and_confirm_promotes_it(self) -> None:
         story_id = self._ingest_story(
@@ -104,6 +107,21 @@ class StoryApiTests(unittest.TestCase):
             item for item in story_after_confirm["memory"] if item["attributes"].get("name") == "Boris"
         ]
         self.assertTrue(confirmed_facts)
+
+    def test_analyze_scene_returns_uncertain_when_memory_is_irrelevant(self) -> None:
+        story_id = self._ingest_story(
+            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        )
+
+        response = self.client.post(
+            f"/stories/{story_id}/analyze",
+            json={"scene_text": "Quantum satellites collapse into mirrors."},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "uncertain")
+        self.assertEqual(payload["stop_reason"], "insufficient_evidence")
 
     def _ingest_story(self, text: str) -> str:
         response = self.client.post(

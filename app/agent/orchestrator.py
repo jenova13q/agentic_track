@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.agent.llm import LLMDecisionEngine
 from app.memory.store import StoryStore
 from app.models.schemas import (
     AnalyzeSceneRequest,
@@ -11,6 +12,7 @@ from app.models.schemas import (
     MemoryRecord,
     StoryChunk,
     StoryData,
+    ToolTrace,
 )
 from app.tools.services import (
     ToolService,
@@ -24,6 +26,7 @@ class DemoOrchestrator:
     def __init__(self, store: StoryStore) -> None:
         self.store = store
         self.tools = ToolService()
+        self.llm = LLMDecisionEngine()
 
     def ingest_story(self, payload: IngestStoryRequest) -> IngestStoryResponse:
         story_id = str(uuid4())
@@ -54,23 +57,42 @@ class DemoOrchestrator:
         if story is None:
             raise ValueError("story_not_found")
 
-        tool_traces = []
+        tool_plan, planning_reason = self.llm.choose_tool_plan(
+            story_title=story.title,
+            scene_text=payload.scene_text,
+            question=payload.question,
+            memory_preview=[record.canonical_value for record in story.memory[:8]],
+        )
 
-        chunk_refs, trace = self.tools.search_story_chunks(story, payload.scene_text)
-        tool_traces.append(trace)
+        tool_traces: list[ToolTrace] = [
+            ToolTrace(
+                tool_name="tool_planner",
+                success=True,
+                detail=f"{planning_reason}: {', '.join(tool_plan)}",
+            )
+        ]
 
-        memory_records, trace = self.tools.query_story_memory(story, payload.scene_text)
-        tool_traces.append(trace)
+        chunk_refs: list[str] = []
+        memory_records: list[MemoryRecord] = []
+        character_records: list[MemoryRecord] = []
+        timeline_records: list[MemoryRecord] = []
 
-        character_records, trace = self.tools.get_character_profile(story, payload.scene_text)
-        tool_traces.append(trace)
-
-        timeline_records, trace = self.tools.get_timeline_window(story, payload.scene_text)
-        tool_traces.append(trace)
+        for tool_name in tool_plan:
+            if tool_name == "search_story_chunks":
+                chunk_refs, trace = self.tools.search_story_chunks(story, payload.scene_text)
+            elif tool_name == "query_story_memory":
+                memory_records, trace = self.tools.query_story_memory(story, payload.scene_text)
+            elif tool_name == "get_character_profile":
+                character_records, trace = self.tools.get_character_profile(story, payload.scene_text)
+            elif tool_name == "get_timeline_window":
+                timeline_records, trace = self.tools.get_timeline_window(story, payload.scene_text)
+            else:
+                continue
+            tool_traces.append(trace)
 
         combined_memory: list[MemoryRecord] = []
         seen_ids: set[str] = set()
-        for record in story.memory + memory_records + character_records + timeline_records:
+        for record in memory_records + character_records + timeline_records:
             if record.id in seen_ids:
                 continue
             seen_ids.add(record.id)
@@ -90,14 +112,23 @@ class DemoOrchestrator:
                 if stored is not None:
                     pending_update_id = stored.id
 
+        llm_explanation = self.llm.synthesize_explanation(
+            scene_text=payload.scene_text,
+            issues=issues,
+            evidence_refs=chunk_refs,
+            proposed_change_count=len(proposed),
+        )
+        orchestrator_mode = "llm" if self.llm.enabled else "heuristic"
+
         if issues:
             return AnalyzeSceneResponse(
                 status="conflict",
                 issue_type=issue_type if issue_type != "none" else "mixed",
-                explanation=" ".join(issues),
+                explanation=llm_explanation or " ".join(issues),
                 confidence=0.8,
                 evidence_refs=chunk_refs[:3],
                 stop_reason="conflict_detected",
+                orchestrator_mode=orchestrator_mode,
                 tool_traces=tool_traces,
                 memory_update_proposal_id=pending_update_id,
             )
@@ -107,11 +138,13 @@ class DemoOrchestrator:
                 status="uncertain",
                 issue_type="none",
                 explanation=(
-                    "Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены."
+                    llm_explanation
+                    or "Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены."
                 ),
                 confidence=0.35,
                 evidence_refs=[],
                 stop_reason="insufficient_evidence",
+                orchestrator_mode=orchestrator_mode,
                 tool_traces=tool_traces,
                 memory_update_proposal_id=pending_update_id,
             )
@@ -123,10 +156,11 @@ class DemoOrchestrator:
         return AnalyzeSceneResponse(
             status="no_conflict",
             issue_type="none",
-            explanation=explanation,
+            explanation=llm_explanation or explanation,
             confidence=0.72,
             evidence_refs=chunk_refs[:3],
             stop_reason="evidence_threshold_met",
+            orchestrator_mode=orchestrator_mode,
             tool_traces=tool_traces,
             memory_update_proposal_id=pending_update_id,
         )

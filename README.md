@@ -101,3 +101,7 @@ uvicorn app.main:app --reload
 
 Для демо можно использовать подготовленный пример истории:
 - `data/demo-story.txt`
+- `data/demo-scenarios.json`
+
+Дополнительный сценарий показа:
+- `docs/demo-script.md`

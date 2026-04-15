@@ -87,6 +87,7 @@ class AnalyzeSceneResponse(BaseModel):
     confidence: float
     evidence_refs: list[str] = Field(default_factory=list)
     stop_reason: str
+    orchestrator_mode: Literal["heuristic", "llm"]
     tool_traces: list[ToolTrace] = Field(default_factory=list)
     memory_update_proposal_id: str | None = None
 

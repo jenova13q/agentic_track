@@ -16,6 +16,10 @@ TRAIT_RE = re.compile(
     r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:is|was|является|был|была)\s+([A-Za-zА-Яа-яЁё-]+)",
     re.IGNORECASE,
 )
+MEETING_RE = re.compile(
+    r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:meets|met|встречает|встретил|встретила)\s+([А-ЯЁA-Z][а-яёa-z]+)",
+    re.IGNORECASE,
+)
 
 OPPOSITE_TRAITS = {
     "brave": "cowardly",
@@ -81,7 +85,11 @@ class ToolService:
             detail=f"matched {len(timeline_records)} timeline records",
         )
 
-    def propose_memory_update(self, summary: str, changes: list[MemoryRecord]) -> tuple[PendingUpdate | None, ToolTrace]:
+    def propose_memory_update(
+        self,
+        summary: str,
+        changes: list[MemoryRecord],
+    ) -> tuple[PendingUpdate | None, ToolTrace]:
         if not changes:
             return None, ToolTrace(
                 tool_name="propose_memory_update",
@@ -174,13 +182,25 @@ def extract_memory_records(text: str) -> list[MemoryRecord]:
             )
         )
 
+    for match in MEETING_RE.finditer(text):
+        left_name, right_name = match.groups()
+        records.append(
+            MemoryRecord(
+                type="relationship",
+                canonical_value=f"{left_name} meets {right_name}",
+                confidence=0.6,
+                evidence_refs=[f"meeting:{left_name}:{right_name}"],
+                attributes={"from": left_name, "to": right_name, "kind": "meeting"},
+            )
+        )
+
     return records
 
 
 def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[str], list[MemoryRecord], str]:
     issues: list[str] = []
     proposed: list[MemoryRecord] = []
-    issue_type = "none"
+    issue_types_seen: set[str] = set()
 
     memory_by_name: dict[str, list[MemoryRecord]] = {}
     for record in memory:
@@ -197,7 +217,7 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
         }
         if known_locations and location not in known_locations:
             issues.append(f"Факт о месте для {name} конфликтует с памятью истории.")
-            issue_type = "fact"
+            issue_types_seen.add("fact")
         elif not known_locations:
             proposed.append(
                 MemoryRecord(
@@ -221,7 +241,7 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
         opposites = {OPPOSITE_TRAITS.get(value) for value in known_traits}
         if trait in opposites:
             issues.append(f"Черта {trait} для {name} противоречит ранее зафиксированному характеру.")
-            issue_type = "character"
+            issue_types_seen.add("character")
         elif not known_traits:
             proposed.append(
                 MemoryRecord(
@@ -244,7 +264,7 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
                 issues.append(
                     f"Таймлайн-ссылка на day {scene_day} выходит за ожидаемое окно истории."
                 )
-                issue_type = "timeline"
+                issue_types_seen.add("timeline")
     elif scene_days:
         for scene_day in scene_days:
             proposed.append(
@@ -258,7 +278,11 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
                 )
             )
 
-    if issues and proposed and issue_type == "none":
+    if len(issue_types_seen) > 1:
         issue_type = "mixed"
+    elif len(issue_types_seen) == 1:
+        issue_type = next(iter(issue_types_seen))
+    else:
+        issue_type = "none"
 
     return issues, proposed, issue_type

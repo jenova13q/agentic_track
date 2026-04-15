@@ -18,6 +18,14 @@ def load_dotenv(dotenv_path: Path = Path(".env")) -> None:
 load_dotenv()
 
 
+def first_env(*keys: str) -> str | None:
+    for key in keys:
+        value = os.getenv(key)
+        if value:
+            return value
+    return None
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "Story Consistency Agent"
@@ -27,9 +35,11 @@ class Settings:
     max_agent_steps: int = 4
     max_tool_calls: int = 6
     max_external_calls: int = 1
-    llm_model: str = os.getenv("LLM_MODEL", "demo-heuristic-orchestrator")
+    llm_model: str = os.getenv("LLM_MODEL", "gpt-4.1-mini")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "demo-token-overlap")
-    llm_api_key: str | None = os.getenv("LLM_API_KEY")
+    llm_api_key: str | None = first_env("LLM_API_KEY", "OPENAI_API_KEY", "openai_api_key")
+    openai_api_key: str | None = first_env("OPENAI_API_KEY", "openai_api_key", "openai_api_key_")
+    anthropic_api_key: str | None = first_env("ANTHROPIC_API_KEY", "anthropic_api_key")
     embedding_api_key: str | None = os.getenv("EMBEDDING_API_KEY")
     external_research_api_key: str | None = os.getenv("EXTERNAL_RESEARCH_API_KEY")
 
