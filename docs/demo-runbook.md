@@ -178,3 +178,22 @@ curl -X POST http://127.0.0.1:8000/stories/{story_id}/pending-updates/{proposal_
 - Система умеет возвращать `conflict`, `no_conflict`, `uncertain`.
 - Обновления памяти не применяются автоматически.
 - Даже при недоступности live LLM path остаётся рабочий heuristic fallback.
+
+## 9. Observability
+
+После одного-двух запросов анализа показать:
+
+```bash
+curl http://127.0.0.1:8000/observability/summary
+```
+
+Ожидание:
+- есть `analysis_requests`;
+- есть средние `tool_call_count` и `agent_step_count`;
+- видны последние `stop_reason`.
+
+При необходимости показать детальные следы:
+
+```bash
+curl http://127.0.0.1:8000/observability/traces
+```

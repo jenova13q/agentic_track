@@ -3,24 +3,35 @@
     "name": "happy_path_new_fact",
     "story_text": "Day 1. Anna lives in Tashkent. Anna is brave.\n\nDay 2. Boris lives in Samarkand. Boris is kind.",
     "scene_text": "Day 3. Anna meets Boris in Tashkent.",
-    "expected_status": "no_conflict"
+    "expected_status": "no_conflict",
+    "expected_issue_type": "none"
   },
   {
     "name": "character_conflict",
     "story_text": "Day 1. Anna lives in Tashkent. Anna is brave.",
     "scene_text": "Day 2. Anna is cowardly.",
-    "expected_status": "conflict"
+    "expected_status": "conflict",
+    "expected_issue_type": "character"
   },
   {
     "name": "fact_conflict",
     "story_text": "Day 1. Anna lives in Tashkent. Anna is brave.",
     "scene_text": "Day 2. Anna lives in Samarkand.",
-    "expected_status": "conflict"
+    "expected_status": "conflict",
+    "expected_issue_type": "fact"
   },
   {
     "name": "timeline_conflict",
     "story_text": "Day 1. Anna lives in Tashkent.\n\nDay 2. Boris lives in Samarkand.",
     "scene_text": "Day 7. Anna meets Boris.",
-    "expected_status": "conflict"
+    "expected_status": "conflict",
+    "expected_issue_type": "timeline"
+  },
+  {
+    "name": "uncertain_scene",
+    "story_text": "Day 1. Anna lives in Tashkent. Anna is brave.",
+    "scene_text": "Quantum satellites collapse into mirrors.",
+    "expected_status": "uncertain",
+    "expected_issue_type": "none"
   }
 ]

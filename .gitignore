@@ -38,6 +38,7 @@ Thumbs.db
 
 # Project runtime data
 data/raw/
+data/telemetry/
 data/tmp/
 data/vector_store/
 
