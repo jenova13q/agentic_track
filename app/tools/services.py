@@ -238,7 +238,11 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
             for item in memory_by_name.get(name, [])
             if "trait" in item.attributes
         }
-        opposites = {OPPOSITE_TRAITS.get(value) for value in known_traits}
+        opposites = {
+            opposite
+            for value in known_traits
+            if (opposite := OPPOSITE_TRAITS.get(value)) is not None
+        }
         if trait in opposites:
             issues.append(f"Черта {trait} для {name} противоречит ранее зафиксированному характеру.")
             issue_types_seen.add("character")

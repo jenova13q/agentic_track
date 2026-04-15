@@ -96,9 +96,11 @@ class DemoOrchestrator:
 
             previous_evidence_count = len(working_state.evidence_refs)
             previous_memory_count = len(memory_records) + len(character_records) + len(timeline_records)
+            current_chunk_refs: list[str] = []
 
             if tool_name == "search_story_chunks":
-                chunk_refs, trace = self.tools.search_story_chunks(story, payload.scene_text)
+                current_chunk_refs, trace = self.tools.search_story_chunks(story, payload.scene_text)
+                chunk_refs = current_chunk_refs
             elif tool_name == "query_story_memory":
                 memory_records, trace = self.tools.query_story_memory(story, payload.scene_text)
             elif tool_name == "get_character_profile":
@@ -114,7 +116,7 @@ class DemoOrchestrator:
             trace.step_index = working_state.current_step
             tool_traces.append(trace)
 
-            for ref in chunk_refs:
+            for ref in current_chunk_refs:
                 if ref not in working_state.evidence_refs:
                     working_state.evidence_refs.append(ref)
 

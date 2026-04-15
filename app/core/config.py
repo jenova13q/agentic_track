@@ -39,7 +39,7 @@ class Settings:
     llm_model: str = os.getenv("LLM_MODEL", "gpt-5.4-mini")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "demo-token-overlap")
     llm_api_key: str | None = first_env("LLM_API_KEY", "OPENAI_API_KEY", "openai_api_key")
-    openai_api_key: str | None = first_env("OPENAI_API_KEY", "openai_api_key", "openai_api_key_")
+    openai_api_key: str | None = first_env("OPENAI_API_KEY", "openai_api_key")
     anthropic_api_key: str | None = first_env("ANTHROPIC_API_KEY", "anthropic_api_key")
     embedding_api_key: str | None = os.getenv("EMBEDDING_API_KEY")
     external_research_api_key: str | None = os.getenv("EXTERNAL_RESEARCH_API_KEY")
