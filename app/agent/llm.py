@@ -106,6 +106,8 @@ class LLMDecisionEngine:
         self,
         *,
         scene_text: str,
+        issue_type: str,
+        status: str,
         issues: list[str],
         evidence_refs: list[str],
         proposed_change_count: int,
@@ -120,7 +122,11 @@ class LLMDecisionEngine:
                     "role": "system",
                     "content": (
                         "You explain story consistency findings for a writer. "
-                        "Be concise, specific, and mention uncertainty when needed."
+                        "Be concise and specific. "
+                        "Use these result labels: no_conflict, conflict, uncertain. "
+                        "Use these conflict types when relevant: character, fact, timeline, object, mixed. "
+                        "Start the explanation by explicitly naming the result and, if status=conflict, the conflict type. "
+                        "Then briefly explain why."
                     ),
                 },
                 {
@@ -128,6 +134,8 @@ class LLMDecisionEngine:
                     "content": json.dumps(
                         {
                             "scene_text": scene_text,
+                            "status": status,
+                            "issue_type": issue_type,
                             "issues": issues,
                             "evidence_refs": evidence_refs[:5],
                             "proposed_change_count": proposed_change_count,
@@ -162,7 +170,7 @@ class LLMDecisionEngine:
 
         tools: list[ToolName] = ["search_story_chunks", "query_story_memory"]
 
-        if "day " in lowered or "день " in lowered or "timeline" in lowered:
+        if any(token in lowered for token in ("day ", "день ", "timeline", "утро", "вечер", "неделю")):
             tools.append("get_timeline_window")
 
         if any(

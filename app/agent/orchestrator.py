@@ -90,13 +90,13 @@ class DemoOrchestrator:
         working_state = AgentWorkingState(
             request_id=str(uuid4()),
             story_id=story.story_id,
-            current_goal=payload.question or "Проверить сцену на консистентность с памятью истории.",
+            current_goal=self._build_analysis_goal(payload.question),
         )
 
         tool_plan, planning_reason = self.llm.choose_tool_plan(
             story_title=story.title,
             scene_text=payload.scene_text,
-            question=payload.question,
+            question=working_state.current_goal,
             memory_preview=[record.canonical_value for record in story.memory[:8]],
         )
 
@@ -184,23 +184,23 @@ class DemoOrchestrator:
                 if stored is not None:
                     pending_update_id = stored.id
 
-        llm_explanation = None
+        orchestrator_mode = "llm" if self.llm.enabled else "heuristic"
+
         if issues:
             llm_explanation = self.llm.synthesize_explanation(
                 scene_text=payload.scene_text,
+                issue_type=issue_type if issue_type != "none" else "mixed",
+                status="conflict",
                 issues=issues,
                 evidence_refs=chunk_refs,
                 proposed_change_count=len(proposed),
             )
-        orchestrator_mode = "llm" if self.llm.enabled else "heuristic"
-
-        if issues:
             working_state.confidence = 0.8
             working_state.stop_reason = working_state.stop_reason or "conflict_detected"
             return AnalyzeSceneResponse(
                 status="conflict",
                 issue_type=issue_type if issue_type != "none" else "mixed",
-                explanation=llm_explanation or " ".join(issues),
+                explanation=llm_explanation or self._fallback_conflict_explanation(issue_type, issues),
                 confidence=working_state.confidence,
                 evidence_refs=working_state.evidence_refs[:3],
                 stop_reason=working_state.stop_reason,
@@ -217,7 +217,7 @@ class DemoOrchestrator:
             return AnalyzeSceneResponse(
                 status="uncertain",
                 issue_type="none",
-                explanation="Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены.",
+                explanation="Результат: uncertain. Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены.",
                 confidence=working_state.confidence,
                 evidence_refs=[],
                 stop_reason=working_state.stop_reason,
@@ -228,7 +228,7 @@ class DemoOrchestrator:
                 memory_update_proposal_id=pending_update_id,
             )
 
-        explanation = "Сцена не показала явных конфликтов с текущей story memory."
+        explanation = "Результат: no_conflict. Сцена не показала явных конфликтов с текущей story memory."
         if pending_update_id is not None:
             explanation += " При этом найдено новое знание, вынесенное в pending update."
 
@@ -247,3 +247,18 @@ class DemoOrchestrator:
             tool_traces=tool_traces,
             memory_update_proposal_id=pending_update_id,
         )
+
+    def _build_analysis_goal(self, user_comment: str | None) -> str:
+        base_goal = (
+            "Проверь новый фрагмент на консистентность относительно story memory. "
+            "Сначала определи один из исходов: no_conflict, conflict или uncertain. "
+            "Если есть conflict, укажи тип: character, fact, timeline, object или mixed. "
+            "В объяснении прямо назови тип результата и кратко объясни причину."
+        )
+        if user_comment:
+            return f"{base_goal} Дополнительный комментарий автора: {user_comment}"
+        return base_goal
+
+    def _fallback_conflict_explanation(self, issue_type: str, issues: list[str]) -> str:
+        visible_type = issue_type if issue_type != "none" else "mixed"
+        return f"Результат: conflict. Тип: {visible_type}. {' '.join(issues)}"
