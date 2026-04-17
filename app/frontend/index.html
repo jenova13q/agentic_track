@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Story Consistency Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel sidebar">
+      <h1>Story Consistency Agent</h1>
+      <p class="muted">Минимальный demo-клиент без перезагрузки страниц.</p>
+
+      <div class="stack">
+        <button id="load-demo-story">Загрузить demo-story</button>
+        <button id="load-writing-session">Загрузить writer session</button>
+        <button id="refresh-stories" class="secondary">Обновить список историй</button>
+      </div>
+
+      <label class="field">
+        <span>Название истории</span>
+        <input id="story-title" type="text" value="Колокол без моря">
+      </label>
+
+      <label class="field">
+        <span>Черновик истории</span>
+        <textarea id="story-text" rows="14"></textarea>
+      </label>
+
+      <div class="stack">
+        <button id="ingest-story">Создать историю</button>
+        <button id="append-scene" class="secondary">Добавить текущий фрагмент в историю</button>
+      </div>
+
+      <div class="story-list">
+        <h2>Истории</h2>
+        <ul id="stories"></ul>
+      </div>
+    </aside>
+
+    <main class="panel main">
+      <section class="section">
+        <div class="section-head">
+          <h2>Текущая сессия</h2>
+          <span id="current-story" class="badge">История не выбрана</span>
+        </div>
+        <p id="session-hint" class="muted">Сначала создайте историю или выберите существующую слева.</p>
+      </section>
+
+      <section class="section">
+        <h2>Новый фрагмент</h2>
+        <label class="field">
+          <span>Сцена / новый кусок</span>
+          <textarea id="scene-text" rows="8"></textarea>
+        </label>
+        <label class="field">
+          <span>Вопрос агенту</span>
+          <input id="scene-question" type="text" value="Проверь сцену на консистентность, скажи conflict/no_conflict/uncertain и объясни почему.">
+        </label>
+        <div class="stack horizontal">
+          <button id="analyze-scene">Проверить сцену</button>
+          <button id="apply-session-chunk" class="secondary">Подставить следующий demo-кусок</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Ответ агента</h2>
+        <div id="messages" class="messages"></div>
+      </section>
+    </main>
+
+    <aside class="panel inspector">
+      <section class="section">
+        <h2>Pending updates</h2>
+        <div id="pending-updates" class="list"></div>
+      </section>
+
+      <section class="section">
+        <h2>Observability</h2>
+        <pre id="observability-summary" class="code-block"></pre>
+      </section>
+
+      <section class="section">
+        <h2>Recent traces</h2>
+        <pre id="recent-traces" class="code-block"></pre>
+      </section>
+    </aside>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

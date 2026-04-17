@@ -1,6 +1,9 @@
 from time import perf_counter
+import json
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from app.agent.orchestrator import DemoOrchestrator
 from app.memory.store import StoryStore
@@ -8,6 +11,8 @@ from app.models.schemas import (
     AgentTrace,
     AnalyzeSceneRequest,
     AnalyzeSceneResponse,
+    AppendSceneRequest,
+    AppendSceneResponse,
     ConfirmUpdateResponse,
     HealthResponse,
     IngestStoryRequest,
@@ -24,11 +29,17 @@ router = APIRouter()
 store = StoryStore()
 orchestrator = DemoOrchestrator(store=store)
 observability = ObservabilityStore()
+data_dir = Path("data")
 
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@router.get("/")
+def root() -> FileResponse:
+    return FileResponse("app/frontend/index.html")
 
 
 @router.get("/stories", response_model=StoryListResponse)
@@ -77,6 +88,14 @@ def analyze_scene(story_id: str, payload: AnalyzeSceneRequest, request: Request)
         )
     )
     return response
+
+
+@router.post("/stories/{story_id}/append-scene", response_model=AppendSceneResponse)
+def append_scene(story_id: str, payload: AppendSceneRequest) -> AppendSceneResponse:
+    story = store.get_story(story_id)
+    if story is None:
+        raise HTTPException(status_code=404, detail="story_not_found")
+    return orchestrator.append_scene(story_id=story_id, payload=payload)
 
 
 @router.post(
@@ -138,3 +157,18 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
 @router.get("/observability/traces", response_model=RecentTracesResponse)
 def get_recent_observability_traces() -> RecentTracesResponse:
     return observability.recent_traces()
+
+
+@router.get("/demo/story")
+def get_demo_story() -> dict[str, str]:
+    return {"text": data_dir.joinpath("demo-story.txt").read_text(encoding="utf-8")}
+
+
+@router.get("/demo/writing-session")
+def get_demo_writing_session() -> dict[str, object]:
+    return json.loads(data_dir.joinpath("demo-writing-session.json").read_text(encoding="utf-8"))
+
+
+@router.get("/demo/scenarios")
+def get_demo_scenarios() -> list[dict[str, object]]:
+    return json.loads(data_dir.joinpath("demo-scenarios.json").read_text(encoding="utf-8"))

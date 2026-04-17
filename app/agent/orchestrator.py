@@ -9,6 +9,8 @@ from app.models.schemas import (
     AgentWorkingState,
     AnalyzeSceneRequest,
     AnalyzeSceneResponse,
+    AppendSceneRequest,
+    AppendSceneResponse,
     IngestStoryRequest,
     IngestStoryResponse,
     MemoryRecord,
@@ -52,6 +54,32 @@ class DemoOrchestrator:
             chunk_count=len(chunk_models),
             extracted_character_count=character_count,
             extracted_event_count=event_count,
+        )
+
+    def append_scene(self, story_id: str, payload: AppendSceneRequest) -> AppendSceneResponse:
+        story = self.store.load_story_data(story_id)
+        if story is None:
+            raise ValueError("story_not_found")
+
+        new_chunks = build_story_chunks(story.story_id, payload.scene_text)
+        next_index = len(story.chunks)
+        chunk_models: list[StoryChunk] = []
+        for offset, chunk in enumerate(new_chunks):
+            chunk["index"] = next_index + offset
+            chunk["source_ref"] = f"chunk:{next_index + offset}"
+            chunk_models.append(StoryChunk(**chunk))
+
+        appended_memory = extract_memory_records(payload.scene_text)
+        story.raw_text = f"{story.raw_text}\n\n{payload.scene_text}".strip()
+        story.chunks.extend(chunk_models)
+        story.memory.extend(appended_memory)
+        self.store.append_scene(story)
+
+        return AppendSceneResponse(
+            status="appended",
+            story_id=story.story_id,
+            chunk_count=len(story.chunks),
+            appended_memory_count=len(appended_memory),
         )
 
     def analyze_scene(self, story_response, payload: AnalyzeSceneRequest) -> AnalyzeSceneResponse:
@@ -156,12 +184,14 @@ class DemoOrchestrator:
                 if stored is not None:
                     pending_update_id = stored.id
 
-        llm_explanation = self.llm.synthesize_explanation(
-            scene_text=payload.scene_text,
-            issues=issues,
-            evidence_refs=chunk_refs,
-            proposed_change_count=len(proposed),
-        )
+        llm_explanation = None
+        if issues:
+            llm_explanation = self.llm.synthesize_explanation(
+                scene_text=payload.scene_text,
+                issues=issues,
+                evidence_refs=chunk_refs,
+                proposed_change_count=len(proposed),
+            )
         orchestrator_mode = "llm" if self.llm.enabled else "heuristic"
 
         if issues:
@@ -187,10 +217,7 @@ class DemoOrchestrator:
             return AnalyzeSceneResponse(
                 status="uncertain",
                 issue_type="none",
-                explanation=(
-                    llm_explanation
-                    or "Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены."
-                ),
+                explanation="Недостаточно релевантной памяти или narrative evidence для уверенной оценки сцены.",
                 confidence=working_state.confidence,
                 evidence_refs=[],
                 stop_reason=working_state.stop_reason,
@@ -210,7 +237,7 @@ class DemoOrchestrator:
         return AnalyzeSceneResponse(
             status="no_conflict",
             issue_type="none",
-            explanation=llm_explanation or explanation,
+            explanation=explanation,
             confidence=working_state.confidence,
             evidence_refs=working_state.evidence_refs[:3],
             stop_reason=working_state.stop_reason,

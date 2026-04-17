@@ -32,6 +32,11 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
         self.assertIn("X-Request-ID", response.headers)
 
+    def test_root_serves_demo_ui(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Story Consistency Agent", response.text)
+
     def test_ingest_and_list_story(self) -> None:
         ingest_response = self.client.post(
             "/stories/ingest",
@@ -180,6 +185,40 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(len(traces), 1)
         self.assertEqual(traces[0]["event_type"], "analysis")
         self.assertEqual(traces[0]["status"], "conflict")
+
+    def test_append_scene_adds_chunk_and_memory(self) -> None:
+        story_id = self._ingest_story(
+            text="Лев живёт в Приморске. Лев был смелый."
+        )
+
+        append_response = self.client.post(
+            f"/stories/{story_id}/append-scene",
+            json={"scene_text": "Тем же вечером Лев потерял ручку."},
+        )
+        self.assertEqual(append_response.status_code, 200)
+        payload = append_response.json()
+        self.assertEqual(payload["status"], "appended")
+        self.assertGreaterEqual(payload["chunk_count"], 2)
+
+        story = self.client.get(f"/stories/{story_id}").json()
+        object_facts = [
+            item for item in story["memory"] if item["attributes"].get("object") == "ручку"
+        ]
+        self.assertTrue(object_facts)
+
+    def test_object_state_conflict_is_detected(self) -> None:
+        story_id = self._ingest_story(
+            text="Тем же вечером Лев потерял ручку."
+        )
+
+        response = self.client.post(
+            f"/stories/{story_id}/analyze",
+            json={"scene_text": "На следующее утро Лев достал ручку."},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "conflict")
+        self.assertIn(payload["issue_type"], {"object", "mixed"})
 
     def _ingest_story(self, text: str) -> str:
         response = self.client.post(

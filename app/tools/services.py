@@ -8,6 +8,9 @@ from app.retrieval.service import RetrieverService, tokenize
 
 CHARACTER_RE = re.compile(r"\b[А-ЯЁA-Z][а-яёa-z]+\b")
 DAY_RE = re.compile(r"\b(?:day|день)\s*(\d+)\b", re.IGNORECASE)
+NEXT_DAY_RE = re.compile(r"(?:на\s+следующ(?:ий|ее)\s+(?:день|утро)|следующим\s+утром)", re.IGNORECASE)
+SAME_EVENING_RE = re.compile(r"(?:тем\s+же\s+вечером|в\s+тот\s+же\s+вечер)", re.IGNORECASE)
+WEEK_LATER_RE = re.compile(r"(?:через\s+неделю|спустя\s+неделю)", re.IGNORECASE)
 LOCATION_RE = re.compile(
     r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:lives in|жив[её]т в)\s+([А-ЯЁA-Z][\w-]+)",
     re.IGNORECASE,
@@ -18,6 +21,14 @@ TRAIT_RE = re.compile(
 )
 MEETING_RE = re.compile(
     r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:meets|met|встречает|встретил|встретила)\s+([А-ЯЁA-Z][а-яёa-z]+)",
+    re.IGNORECASE,
+)
+LOST_OBJECT_RE = re.compile(
+    r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:потерял|потеряла)\s+([а-яёa-z]+)\b",
+    re.IGNORECASE,
+)
+HAS_OBJECT_RE = re.compile(
+    r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:достал|достала|держал|держала|сжал|сжала|наш[её]л|нашла)\s+([а-яёa-z]+)\b",
     re.IGNORECASE,
 )
 
@@ -70,7 +81,7 @@ class ToolService:
     def get_timeline_window(self, story: StoryData, scene_text: str) -> tuple[list[MemoryRecord], ToolTrace]:
         markers = DAY_RE.findall(scene_text)
         timeline_records = [
-            record for record in story.memory if record.type == "event" and "day" in record.attributes
+            record for record in story.memory if record.type == "event"
         ]
         if markers:
             day_values = {int(value) for value in markers}
@@ -79,6 +90,14 @@ class ToolService:
                 for record in timeline_records
                 if int(record.attributes.get("day", -999)) in day_values
             ]
+        else:
+            scene_temporal_kind = detect_temporal_kind(scene_text)
+            if scene_temporal_kind is not None:
+                timeline_records = [
+                    record
+                    for record in timeline_records
+                    if record.attributes.get("temporal_kind") == scene_temporal_kind
+                ]
         return timeline_records, ToolTrace(
             tool_name="get_timeline_window",
             success=True,
@@ -131,6 +150,7 @@ def build_story_chunks(story_id: str, text: str) -> list[dict[str, object]]:
 
 def extract_memory_records(text: str) -> list[MemoryRecord]:
     records: list[MemoryRecord] = []
+    paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
 
     names = [name for name in CHARACTER_RE.findall(text) if len(name) > 2]
     for name, count in Counter(names).items():
@@ -182,6 +202,20 @@ def extract_memory_records(text: str) -> list[MemoryRecord]:
             )
         )
 
+    for index, paragraph in enumerate(paragraphs, start=1):
+        temporal_kind = detect_temporal_kind(paragraph)
+        if temporal_kind is None:
+            continue
+        records.append(
+            MemoryRecord(
+                type="event",
+                canonical_value=f"Timeline marker {temporal_kind}",
+                confidence=0.55,
+                evidence_refs=[f"temporal:{index}:{temporal_kind}"],
+                attributes={"sequence": index, "temporal_kind": temporal_kind},
+            )
+        )
+
     for match in MEETING_RE.finditer(text):
         left_name, right_name = match.groups()
         records.append(
@@ -191,6 +225,30 @@ def extract_memory_records(text: str) -> list[MemoryRecord]:
                 confidence=0.6,
                 evidence_refs=[f"meeting:{left_name}:{right_name}"],
                 attributes={"from": left_name, "to": right_name, "kind": "meeting"},
+            )
+        )
+
+    for match in LOST_OBJECT_RE.finditer(text):
+        owner, object_name = match.groups()
+        records.append(
+            MemoryRecord(
+                type="fact",
+                canonical_value=f"{owner} lost {object_name}",
+                confidence=0.65,
+                evidence_refs=[f"object-lost:{owner}:{object_name.lower()}"],
+                attributes={"name": owner, "object": object_name.lower(), "object_state": "lost"},
+            )
+        )
+
+    for match in HAS_OBJECT_RE.finditer(text):
+        owner, object_name = match.groups()
+        records.append(
+            MemoryRecord(
+                type="fact",
+                canonical_value=f"{owner} has {object_name}",
+                confidence=0.65,
+                evidence_refs=[f"object-has:{owner}:{object_name.lower()}"],
+                attributes={"name": owner, "object": object_name.lower(), "object_state": "has"},
             )
         )
 
@@ -265,9 +323,7 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
         max_known = max(known_days)
         for scene_day in scene_days:
             if scene_day < min_known or scene_day > max_known + 1:
-                issues.append(
-                    f"Таймлайн-ссылка на day {scene_day} выходит за ожидаемое окно истории."
-                )
+                issues.append(f"Таймлайн-ссылка на day {scene_day} выходит за ожидаемое окно истории.")
                 issue_types_seen.add("timeline")
     elif scene_days:
         for scene_day in scene_days:
@@ -282,6 +338,76 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
                 )
             )
 
+    scene_temporal_kind = detect_temporal_kind(scene_text)
+    known_temporal_kinds = {
+        item.attributes["temporal_kind"]
+        for item in memory
+        if "temporal_kind" in item.attributes
+    }
+    if scene_temporal_kind == "mixed_conflict":
+        issues.append("В сцене смешаны несовместимые временные указания.")
+        issue_types_seen.add("timeline")
+    elif scene_temporal_kind == "week_later" and "next_day" in known_temporal_kinds:
+        issues.append("Временной переход сцены выглядит слишком резким по сравнению с уже заданным ритмом событий.")
+        issue_types_seen.add("timeline")
+    elif scene_temporal_kind and scene_temporal_kind not in known_temporal_kinds:
+        proposed.append(
+            MemoryRecord(
+                type="event",
+                canonical_value=f"Timeline marker {scene_temporal_kind}",
+                confidence=0.55,
+                status="pending",
+                evidence_refs=[f"scene-temporal:{scene_temporal_kind}"],
+                attributes={"temporal_kind": scene_temporal_kind},
+            )
+        )
+
+    for match in LOST_OBJECT_RE.finditer(scene_text):
+        owner, object_name = match.groups()
+        object_name = object_name.lower()
+        known_states = {
+            item.attributes["object_state"]
+            for item in memory_by_name.get(owner, [])
+            if item.attributes.get("object") == object_name and "object_state" in item.attributes
+        }
+        if "has" in known_states:
+            issues.append(f"Состояние предмета '{object_name}' для {owner} конфликтует с предыдущей сценой.")
+            issue_types_seen.add("object")
+        elif not known_states:
+            proposed.append(
+                MemoryRecord(
+                    type="fact",
+                    canonical_value=f"{owner} lost {object_name}",
+                    confidence=0.6,
+                    status="pending",
+                    evidence_refs=[f"scene-object-lost:{owner}:{object_name}"],
+                    attributes={"name": owner, "object": object_name, "object_state": "lost"},
+                )
+            )
+
+    for match in HAS_OBJECT_RE.finditer(scene_text):
+        owner, object_name = match.groups()
+        object_name = object_name.lower()
+        known_states = {
+            item.attributes["object_state"]
+            for item in memory_by_name.get(owner, [])
+            if item.attributes.get("object") == object_name and "object_state" in item.attributes
+        }
+        if "lost" in known_states and "has" not in known_states:
+            issues.append(f"Предмет '{object_name}' у {owner} снова появляется без объяснённого возвращения.")
+            issue_types_seen.add("object")
+        elif not known_states:
+            proposed.append(
+                MemoryRecord(
+                    type="fact",
+                    canonical_value=f"{owner} has {object_name}",
+                    confidence=0.6,
+                    status="pending",
+                    evidence_refs=[f"scene-object-has:{owner}:{object_name}"],
+                    attributes={"name": owner, "object": object_name, "object_state": "has"},
+                )
+            )
+
     if len(issue_types_seen) > 1:
         issue_type = "mixed"
     elif len(issue_types_seen) == 1:
@@ -290,3 +416,25 @@ def detect_conflicts(scene_text: str, memory: list[MemoryRecord]) -> tuple[list[
         issue_type = "none"
 
     return issues, proposed, issue_type
+
+
+def detect_temporal_kind(text: str) -> str | None:
+    has_next_day = bool(NEXT_DAY_RE.search(text))
+    has_same_evening = bool(SAME_EVENING_RE.search(text))
+    has_week_later = bool(WEEK_LATER_RE.search(text))
+
+    kinds = [
+        kind
+        for kind, present in (
+            ("next_day", has_next_day),
+            ("same_evening", has_same_evening),
+            ("week_later", has_week_later),
+        )
+        if present
+    ]
+
+    if len(kinds) > 1:
+        return "mixed_conflict"
+    if kinds:
+        return kinds[0]
+    return None

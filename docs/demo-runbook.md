@@ -2,7 +2,14 @@
 
 ## Цель
 
-Этот файл нужен для быстрого и повторяемого запуска демо перед защитой. Здесь собраны точные шаги, команды и ожидаемые результаты.
+Этот файл нужен для быстрого и повторяемого запуска demo перед записью видео и защитой.
+
+Основная стратегия показа:
+- открыть web UI;
+- загрузить готовый demo-world;
+- показать анализ нескольких новых фрагментов;
+- показать `pending update`;
+- показать observability.
 
 ## 1. Поднять сервис
 
@@ -12,7 +19,7 @@
 uvicorn app.main:app --reload
 ```
 
-Базовая проверка:
+### Проверка
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -24,176 +31,188 @@ curl http://127.0.0.1:8000/health
 {"status":"ok"}
 ```
 
-## 2. Happy path без конфликта
+### Открыть UI
 
-### 2.1. Ingest
-
-```bash
-curl -X POST http://127.0.0.1:8000/stories/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"title\":\"Happy Path Demo\",\"text\":\"Day 1. Anna lives in Tashkent. Anna is brave.\n\nDay 2. Boris lives in Samarkand. Boris is kind.\"}"
+```text
+http://127.0.0.1:8000/
 ```
 
-Что сохранить из ответа:
-- `story_id`
+## 2. Подготовить demo-world в UI
 
-### 2.2. Analyze
+В интерфейсе:
+1. Нажать `Загрузить writer session`
+2. Нажать `Создать историю`
+3. Убедиться, что история появилась в списке слева
+4. Убедиться, что active story выбрана
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Day 3. Anna meets Boris in Tashkent.\"}"
-```
+Что проговаривать:
+- это не чат без памяти;
+- у системы есть подтверждённая память истории;
+- новые сцены анализируются поверх уже загруженного мира.
+
+## 3. Happy path без конфликта
+
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Убедиться, что это `large_consistent_chunk`
+3. Нажать `Проверить сцену`
 
 Ожидание:
 - `status = no_conflict`
 - `issue_type = none`
-- есть `tool_traces`
-- есть `orchestrator_mode`
+- в сообщении есть аккуратное объяснение без ложной тревоги
 
-## 3. Character conflict
+Что проговаривать:
+- агент не обязан всегда находить проблему;
+- он может вернуть `no_conflict`, если сцена согласуется с памятью истории.
 
-### 3.1. Ingest
+## 4. Character conflict
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"title\":\"Character Conflict Demo\",\"text\":\"Day 1. Anna lives in Tashkent. Anna is brave.\"}"
-```
-
-### 3.2. Analyze
-
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Day 2. Anna is cowardly.\"}"
-```
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Это будет `small_character_conflict`
+3. Нажать `Проверить сцену`
 
 Ожидание:
 - `status = conflict`
 - `issue_type = character`
-- `stop_reason = conflict_detected`
 
-## 4. Fact conflict
+Что проговаривать:
+- агент поднимает из памяти устойчивую характеристику героя;
+- новая сцена ей противоречит;
+- результат explainable, а не просто “модель так решила”.
 
-### 4.1. Ingest
+## 5. Fact conflict
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"title\":\"Fact Conflict Demo\",\"text\":\"Day 1. Anna lives in Tashkent. Anna is brave.\"}"
-```
-
-### 4.2. Analyze
-
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Day 2. Anna lives in Samarkand.\"}"
-```
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Это будет `medium_fact_conflict`
+3. Нажать `Проверить сцену`
 
 Ожидание:
 - `status = conflict`
 - `issue_type = fact`
 
-## 5. Timeline conflict
+Что проговаривать:
+- `story memory` выступает как structured source of truth;
+- это не просто поиск по тексту, а проверка против уже выделенных фактов.
 
-### 5.1. Ingest
+## 6. Object-state conflict
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"title\":\"Timeline Conflict Demo\",\"text\":\"Day 1. Anna lives in Tashkent.\n\nDay 2. Boris lives in Samarkand.\"}"
-```
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Это будет `small_object_conflict`
+3. Нажать `Проверить сцену`
 
-### 5.2. Analyze
+Ожидание:
+- `status = conflict`
+- `issue_type = object`
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Day 7. Anna meets Boris.\"}"
-```
+Что проговаривать:
+- inconsistency бывает не только по времени и характерам;
+- система умеет ловить часть конфликтов по состоянию объектов.
+
+## 7. Timeline conflict
+
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Это будет `large_timeline_conflict`
+3. Нажать `Проверить сцену`
 
 Ожидание:
 - `status = conflict`
 - `issue_type = timeline`
 
-## 6. Uncertain case
+Что проговаривать:
+- система умеет поднимать временные ориентиры из нескольких фрагментов;
+- при противоречивых temporal cues агент возвращает именно `timeline conflict`.
 
-### 6.1. Ingest
+## 8. Uncertain case
 
-```bash
-curl -X POST http://127.0.0.1:8000/stories/ingest \
-  -H "Content-Type: application/json" \
-  -d "{\"title\":\"Uncertain Demo\",\"text\":\"Day 1. Anna lives in Tashkent. Anna is brave.\"}"
-```
-
-### 6.2. Analyze
-
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Quantum satellites collapse into mirrors.\"}"
-```
+В интерфейсе:
+1. Нажать `Подставить следующий demo-кусок`
+2. Это будет `small_uncertain_chunk`
+3. Нажать `Проверить сцену`
 
 Ожидание:
 - `status = uncertain`
 - `stop_reason = insufficient_evidence`
 
-## 7. Pending update и confirm
+Что проговаривать:
+- агент не притворяется уверенным, если релевантной памяти недостаточно;
+- это важная часть guardrails.
 
-### 7.1. Ingest
+## 9. Object-state conflict через API
+
+Если хотите показать тот же класс конфликта отдельно от UI-сессии, можно повторить его и через API.
+
+### Ingest
 
 ```bash
 curl -X POST http://127.0.0.1:8000/stories/ingest \
   -H "Content-Type: application/json" \
-  -d "{\"title\":\"Pending Update Demo\",\"text\":\"Day 1. Anna lives in Tashkent. Anna is brave.\"}"
+  -d "{\"title\":\"Object Conflict Demo\",\"text\":\"Лев жил в Приморске. Тем же вечером Лев потерял ключ у пристани.\"}"
 ```
 
-### 7.2. Analyze
+### Analyze
 
 ```bash
 curl -X POST http://127.0.0.1:8000/stories/{story_id}/analyze \
   -H "Content-Type: application/json" \
-  -d "{\"scene_text\":\"Day 2. Boris lives in Samarkand. Boris is kind.\"}"
-```
-
-Из ответа сохранить:
-- `memory_update_proposal_id`
-
-### 7.3. Confirm
-
-```bash
-curl -X POST http://127.0.0.1:8000/stories/{story_id}/pending-updates/{proposal_id}/confirm
+  -d "{\"scene_text\":\"Через час Лев держал ключ в ладони, хотя никто его не находил.\"}"
 ```
 
 Ожидание:
-- `status = confirmed`
-- `promoted_memory_ids` непустой
+- `status = conflict`
+- `issue_type = object`
 
-## 8. Что проговаривать во время показа
+Что проговаривать:
+- inconsistency бывает не только по времени;
+- система умеет ловить часть конфликтов по состоянию объектов.
 
-- Оркестратор выбирает tools, а не идёт по жёсткому pipeline.
-- Есть `story memory`, retrieval и bounded agent loop.
-- Система умеет возвращать `conflict`, `no_conflict`, `uncertain`.
-- Обновления памяти не применяются автоматически.
-- Даже при недоступности live LLM path остаётся рабочий heuristic fallback.
+## 10. Pending update, confirm и append
 
-## 9. Observability
+Показ через UI:
+1. Вернуться к консистентному новому фрагменту
+2. Нажать `Проверить сцену`
+3. Если создался `pending update`, показать его справа
+4. Нажать `confirm`
+5. Нажать `Добавить текущий фрагмент в историю`
 
-После одного-двух запросов анализа показать:
+Что проговаривать:
+- агент может предложить обновление памяти;
+- но запись не попадает в confirmed memory автоматически;
+- автор остаётся в контуре принятия решения.
+
+## 11. Observability
+
+В UI справа показать:
+- `Observability`
+- `Recent traces`
+
+Либо через API:
 
 ```bash
 curl http://127.0.0.1:8000/observability/summary
+curl http://127.0.0.1:8000/observability/traces
 ```
 
 Ожидание:
-- есть `analysis_requests`;
-- есть средние `tool_call_count` и `agent_step_count`;
-- видны последние `stop_reason`.
+- есть `analysis_requests`
+- видны `agent_step_count`
+- видны `tool_call_count`
+- видны `stop_reason`
 
-При необходимости показать детальные следы:
+Что проговаривать:
+- качество агента измеряется не только финальным текстом;
+- мы собираем traces его поведения и можем смотреть, как он выбирает инструменты и когда останавливается.
 
-```bash
-curl http://127.0.0.1:8000/observability/traces
-```
+## 12. Если live LLM path подводит
+
+План Б:
+- оставить backend поднятым;
+- показать тот же demo-flow;
+- проговорить, что у системы есть `heuristic fallback`;
+- отдельно показать, что архитектурно live path предусмотрен и проверяется через `tests/live_smoke.py`.
+
+Это нормально для PoC, если основная демонстрация остаётся воспроизводимой.

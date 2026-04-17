@@ -2,14 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.config import settings
-from app.models.schemas import (
-    PendingUpdate,
-    StoryData,
-    StoryListItem,
-    StoryListResponse,
-    StoryResponse,
-    utc_now,
-)
+from app.models.schemas import PendingUpdate, StoryData, StoryListItem, StoryListResponse, StoryResponse, utc_now
 
 
 class StoryStore:
@@ -74,6 +67,9 @@ class StoryStore:
         return update
 
     def replace_story(self, story: StoryData) -> None:
+        self.save_story(story)
+
+    def append_scene(self, story: StoryData) -> None:
         self.save_story(story)
 
     def confirm_update(self, story_id: str, update_id: str) -> PendingUpdate | None:

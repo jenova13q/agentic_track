@@ -2,55 +2,67 @@
 
 ## Цель
 
-Этот файл важнее полного implementation plan для финального показа. Здесь только то, что нужно, чтобы показать систему целиком и получить итоговую оценку.
+Это короткий checklist именно под запись финального видео. Здесь только то, что нужно для цельного показа системы.
 
-## 1. Перед запуском
+## 1. Перед записью
 
-- [ ] Убедиться, что `.env` заполнен
-- [ ] Поднять backend
-- [ ] Проверить `GET /health`
-- [ ] При необходимости прогнать `tests/live_smoke.py`
+- [ ] `.env` заполнен
+- [ ] backend поднят
+- [ ] `GET /health` отвечает `ok`
+- [ ] web UI открывается по `GET /`
+- [ ] при необходимости прогнан `tests/live_smoke.py`
 
-## 2. Обязательные demo capabilities
+## 2. Что обязательно должно работать
 
-- [ ] Ingest истории работает
-- [ ] Analyze scene работает end-to-end
-- [ ] Есть `conflict`, `no_conflict` и `uncertain`
-- [ ] Есть `tool_traces`
-- [ ] Есть `orchestrator_mode`
-- [ ] Есть pending update / confirm flow
-- [ ] Confirmed memory не меняется без confirm
+- [ ] ingest истории
+- [ ] analyze scene end-to-end
+- [ ] есть `conflict`
+- [ ] есть `no_conflict`
+- [ ] есть `uncertain`
+- [ ] есть `tool_traces`
+- [ ] есть `orchestrator_mode`
+- [ ] есть `pending update`
+- [ ] работает `confirm`
+- [ ] работает `reject`
+- [ ] работает `append scene`
+- [ ] observability summary и traces открываются
 
-## 3. Обязательные сценарии показа
+## 3. Сценарии показа
 
-- [ ] Happy path без конфликта
-- [ ] Character conflict
-- [ ] Fact conflict
-- [ ] Timeline conflict
-- [ ] Uncertain case
-- [ ] Pending update + confirm
+- [ ] consistent scene
+- [ ] character conflict
+- [ ] fact conflict
+- [ ] timeline conflict
+- [ ] uncertain case
+- [ ] pending update + confirm
+- [ ] object-state conflict
 
-## 4. Что нужно проговорить на защите
+## 4. Что нужно проговорить
 
-- [ ] Почему это агент, а не workflow
-- [ ] Где находится story memory
-- [ ] Какие tools использует orchestrator
-- [ ] Какие есть guardrails
-- [ ] Почему write path отделён от read path
-- [ ] Как система показывает uncertainty
-- [ ] Как меряется качество
+- [ ] почему это агент, а не workflow
+- [ ] где находится story memory
+- [ ] какие tools выбирает orchestrator
+- [ ] почему write path отделён от read path
+- [ ] как система показывает uncertainty
+- [ ] какие guardrails есть
+- [ ] как наблюдается качество через traces
+- [ ] почему graph memory и MEMO 0 вынесены в дальнейшую работу
 
-## 5. Что не должно сломаться
+## 5. Что не должно сломаться во время видео
 
+- [ ] `GET /`
 - [ ] `GET /stories`
 - [ ] `POST /stories/ingest`
 - [ ] `POST /stories/{story_id}/analyze`
+- [ ] `POST /stories/{story_id}/append-scene`
 - [ ] `POST /stories/{story_id}/pending-updates/{proposal_id}/confirm`
-- [ ] fallback в heuristic mode при проблеме с live LLM
+- [ ] `POST /stories/{story_id}/pending-updates/{proposal_id}/reject`
+- [ ] `GET /observability/summary`
 
-## 6. Минимальный критерий готовности к защите
+## 6. Минимальный критерий готовности к записи
 
-- [ ] Все 6 demo сценариев проходят
-- [ ] Обычный smoke suite зелёный
-- [ ] Live LLM path хотя бы один раз проверен перед показом
-- [ ] Можно объяснить архитектуру за 2-3 минуты
+- [ ] обычный smoke suite зелёный
+- [ ] demo benchmark зелёный
+- [ ] live LLM path хотя бы один раз проверен перед показом
+- [ ] можно объяснить архитектуру за 2-3 минуты
+- [ ] можно показать всю систему от загрузки рассказа до observability

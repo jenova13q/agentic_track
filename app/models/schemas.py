@@ -29,6 +29,17 @@ class IngestStoryResponse(BaseModel):
     extracted_event_count: int
 
 
+class AppendSceneRequest(BaseModel):
+    scene_text: str = Field(min_length=1)
+
+
+class AppendSceneResponse(BaseModel):
+    status: Literal["appended"]
+    story_id: str
+    chunk_count: int
+    appended_memory_count: int
+
+
 class AnalyzeSceneRequest(BaseModel):
     scene_text: str = Field(min_length=1)
     question: str | None = None
@@ -98,7 +109,7 @@ class AgentWorkingState(BaseModel):
 
 class AnalyzeSceneResponse(BaseModel):
     status: Literal["conflict", "no_conflict", "uncertain"]
-    issue_type: Literal["character", "timeline", "fact", "none", "mixed"]
+    issue_type: Literal["character", "timeline", "fact", "object", "none", "mixed"]
     explanation: str
     confidence: float
     evidence_refs: list[str] = Field(default_factory=list)

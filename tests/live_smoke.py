@@ -24,7 +24,12 @@ def run_live_smoke() -> int:
             "/stories/ingest",
             json={
                 "title": "Live Smoke Demo",
-                "text": "Day 1. Anna lives in Tashkent. Anna is brave.",
+                "text": (
+                    "К вечеру Приморск всегда становился похож на плохо вытертое зеркало. "
+                    "Лев живёт в Приморске. Лев был смелый.\n\n"
+                    "На следующее утро Павел приехал с острова. "
+                    "Павел живёт в Маячном. Павел был добрый."
+                ),
             },
         )
         if ingest.status_code != 200:
@@ -35,7 +40,7 @@ def run_live_smoke() -> int:
 
         analyze = client.post(
             f"/stories/{story_id}/analyze",
-            json={"scene_text": "Day 2. Anna is cowardly."},
+            json={"scene_text": "Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту."},
         )
         if analyze.status_code != 200:
             print("FAIL: analyze failed", analyze.status_code, analyze.text)

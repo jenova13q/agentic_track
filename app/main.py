@@ -3,6 +3,7 @@ import time
 from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routes import router
@@ -34,3 +35,4 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 app = FastAPI(title=settings.app_name)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(router, prefix=settings.api_prefix)
+app.mount("/static", StaticFiles(directory="app/frontend"), name="static")

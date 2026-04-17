@@ -2,197 +2,157 @@
 
 ## Цель
 
-Этот файл нужен для защиты и репетиции демо. Здесь зафиксированы готовые запросы, ожидаемое поведение системы и ключевые моменты, которые нужно проговорить во время показа.
+Этот файл нужен для репетиции защиты и быстрой ручной проверки API.
 
-## Сценарий 1. Happy path без конфликта
+Ниже не “абстрактные” кейсы, а запросы под наш текущий литературный demo-world.
+
+## Сценарий 1. Consistent scene
 
 ### История для ingestion
 
 ```text
-Day 1. Anna lives in Tashkent. Anna is brave.
+К вечеру Приморск всегда становился похож на плохо вытертое зеркало. Лев живёт в Приморске. Лев был смелый.
 
-Day 2. Boris lives in Samarkand. Boris is kind.
+На следующее утро Павел приехал с острова. Павел живёт в Маячном. Павел был добрый. Лев встречает Павла у рыбного склада.
+
+Тем же вечером они открыли журнал маяка и решили отплыть к острову перед рассветом.
 ```
 
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Day 3. Anna meets Boris in Tashkent."
+  "scene_text": "Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку."
 }
 ```
 
-### Ожидаемый результат
+### Ожидание
 
-- `status`: `no_conflict`
-- `issue_type`: `none`
-- `stop_reason`: `evidence_threshold_met`
-- `memory_update_proposal_id`: может присутствовать, если сцена добавляет новое устойчивое знание
-- `tool_traces`: есть
-- `orchestrator_mode`: `heuristic` или `llm`
-
-### Что показать
-
-- агент не находит явного конфликта;
-- агент использует tools, а не просто отвечает “из головы”;
-- при необходимости создаёт pending update, но не пишет confirmed memory автоматически.
+- `status = no_conflict`
+- `issue_type = none`
 
 ## Сценарий 2. Character conflict
 
-### История для ingestion
-
-```text
-Day 1. Anna lives in Tashkent. Anna is brave.
-```
-
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Day 2. Anna is cowardly."
+  "scene_text": "Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту."
 }
 ```
 
-### Ожидаемый результат
+### Ожидание
 
-- `status`: `conflict`
-- `issue_type`: `character`
-- `stop_reason`: `conflict_detected`
-- `explanation`: указывает на противоречие между `brave` и `cowardly`
-
-### Что показать
-
-- агент сопоставляет новую сцену с существующей memory facts;
-- конфликт формируется как explainable output, а не как “магическое мнение модели”.
+- `status = conflict`
+- `issue_type = character`
 
 ## Сценарий 3. Fact conflict
 
-### История для ingestion
-
-```text
-Day 1. Anna lives in Tashkent. Anna is brave.
-```
-
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Day 2. Anna lives in Samarkand."
+  "scene_text": "Тем же вечером Павел живёт в Приморске и говорит, что никогда не бывал на Маячном."
 }
 ```
 
-### Ожидаемый результат
+### Ожидание
 
-- `status`: `conflict`
-- `issue_type`: `fact`
-- `stop_reason`: `conflict_detected`
-- `explanation`: указывает на конфликт по месту жительства
-
-### Что показать
-
-- story memory работает как structured source of truth;
-- проект не сводится к semantic search по тексту.
+- `status = conflict`
+- `issue_type = fact`
 
 ## Сценарий 4. Timeline conflict
 
 ### История для ingestion
 
 ```text
-Day 1. Anna lives in Tashkent.
+На следующее утро Павел приехал с острова. Павел живёт в Маячном.
 
-Day 2. Boris lives in Samarkand.
+Тем же вечером Лев и Павел решили отплыть к острову перед рассветом.
 ```
 
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Day 7. Anna meets Boris."
+  "scene_text": "Через неделю, на следующее утро после разговора, они только собрались выйти к причалу."
 }
 ```
 
-### Ожидаемый результат
+### Ожидание
 
-- `status`: `conflict`
-- `issue_type`: `timeline`
-- `stop_reason`: `conflict_detected`
-
-### Что показать
-
-- агент использует timeline-aware analysis;
-- bounded loop приводит к конкретному типу конфликта.
+- `status = conflict`
+- `issue_type = timeline`
 
 ## Сценарий 5. Uncertain result
 
-### История для ingestion
-
-```text
-Day 1. Anna lives in Tashkent. Anna is brave.
-```
-
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Quantum satellites collapse into mirrors."
+  "scene_text": "Под мостовой запели стеклянные рыбы, и город ответил им зелёным светом."
 }
 ```
 
-### Ожидаемый результат
+### Ожидание
 
-- `status`: `uncertain`
-- `issue_type`: `none`
-- `stop_reason`: `insufficient_evidence`
+- `status = uncertain`
+- `issue_type = none`
+- `stop_reason = insufficient_evidence`
 
-### Что показать
-
-- система умеет честно сообщать о недостатке evidence;
-- это важный элемент агентного качества и guardrails.
-
-## Сценарий 6. Pending update and confirm
+## Сценарий 6. Object-state conflict
 
 ### История для ingestion
 
 ```text
-Day 1. Anna lives in Tashkent. Anna is brave.
+Лев жил в Приморске. Тем же вечером Лев потерял ключ у пристани.
 ```
 
-### Запрос на анализ
+### Запрос
 
 ```json
 {
-  "scene_text": "Day 2. Boris lives in Samarkand. Boris is kind."
+  "scene_text": "Через час Лев держал ключ в ладони, хотя никто его не находил."
 }
 ```
 
-### Ожидаемый результат анализа
+### Ожидание
 
-- `status`: обычно `no_conflict`
-- `memory_update_proposal_id`: не `null`
+- `status = conflict`
+- `issue_type = object`
 
-### Следующий шаг
+## Сценарий 7. Pending update and confirm
 
-Вызвать:
+### Запрос
+
+```json
+{
+  "scene_text": "Перед рассветом Павел ждал Льва у причала с термосом."
+}
+```
+
+### Ожидание
+
+- `status = no_conflict`
+- `memory_update_proposal_id != null`
+
+Следующий шаг:
 
 ```text
 POST /stories/{story_id}/pending-updates/{proposal_id}/confirm
 ```
 
-### Ожидаемый результат confirm
+Ожидание:
 
-- `status`: `confirmed`
-- `promoted_memory_ids`: непустой список
+- `status = confirmed`
+- `promoted_memory_ids` непустой
 
-### Что показать
+## Что показывать в ответе
 
-- write path отделён от read/analyze path;
-- система не делает auto-write в story memory;
-- user confirmation встроен в архитектуру, а не добавлен постфактум.
-
-## Короткие тезисы для защиты
-
-- Это агентная система, потому что orchestrator выбирает tools и stop condition, а не идёт по жёстко заданному pipeline.
-- Story memory отделена от raw story text и от временного working state.
-- Система поддерживает `conflict`, `no_conflict` и `uncertain`, а не притворяется всегда уверенной.
-- Pending update / confirm path реализует безопасную memory mutation policy.
-- Даже если live LLM path недоступен, heuristic fallback сохраняет работоспособный bounded demo flow.
+На защите полезно подсвечивать не только `status`, но и:
+- `issue_type`
+- `explanation`
+- `tool_traces`
+- `orchestrator_mode`
+- `stop_reason`
+- `memory_update_proposal_id`
