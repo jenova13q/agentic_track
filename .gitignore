@@ -44,3 +44,4 @@ data/tmp/
 data/vector_store/
 
 docs/implementation-plan.md
+.local/

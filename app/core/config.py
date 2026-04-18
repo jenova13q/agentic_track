@@ -31,6 +31,7 @@ class Settings:
     app_name: str = "Story Consistency Agent"
     api_prefix: str = ""
     data_dir: Path = Path("data")
+    database_path: Path = Path("data/story_memory.sqlite3")
     stories_dir: Path = Path("data/stories")
     telemetry_dir: Path = Path("data/telemetry")
     max_agent_steps: int = 4
