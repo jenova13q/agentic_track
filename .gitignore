@@ -33,6 +33,7 @@ Thumbs.db
 
 # Local databases and runtime files
 *.sqlite
+*.sqlite3
 *.db
 *.log
 
