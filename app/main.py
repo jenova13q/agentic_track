@@ -22,6 +22,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
         response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = "no-store"
         logger.info(
             "request_id=%s path=%s method=%s status=%s duration_ms=%s",
             request_id,

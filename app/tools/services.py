@@ -28,7 +28,7 @@ LOST_OBJECT_RE = re.compile(
     re.IGNORECASE,
 )
 HAS_OBJECT_RE = re.compile(
-    r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:достал|достала|держал|держала|сжал|сжала|наш[её]л|нашла)\s+([а-яёa-z]+)\b",
+    r"\b([А-ЯЁA-Z][а-яёa-z]+)\s+(?:достал|достала|вынул|вынула|вытащил|вытащила|держал|держала|сжал|сжала|наш[её]л|нашла)\s+([а-яёa-z]+)\b",
     re.IGNORECASE,
 )
 
@@ -80,9 +80,7 @@ class ToolService:
 
     def get_timeline_window(self, story: StoryData, scene_text: str) -> tuple[list[MemoryRecord], ToolTrace]:
         markers = DAY_RE.findall(scene_text)
-        timeline_records = [
-            record for record in story.memory if record.type == "event"
-        ]
+        timeline_records = [record for record in story.memory if record.type == "event"]
         if markers:
             day_values = {int(value) for value in markers}
             timeline_records = [
@@ -230,25 +228,27 @@ def extract_memory_records(text: str) -> list[MemoryRecord]:
 
     for match in LOST_OBJECT_RE.finditer(text):
         owner, object_name = match.groups()
+        object_name = object_name.lower()
         records.append(
             MemoryRecord(
                 type="fact",
                 canonical_value=f"{owner} lost {object_name}",
                 confidence=0.65,
-                evidence_refs=[f"object-lost:{owner}:{object_name.lower()}"],
-                attributes={"name": owner, "object": object_name.lower(), "object_state": "lost"},
+                evidence_refs=[f"object-lost:{owner}:{object_name}"],
+                attributes={"name": owner, "object": object_name, "object_state": "lost"},
             )
         )
 
     for match in HAS_OBJECT_RE.finditer(text):
         owner, object_name = match.groups()
+        object_name = object_name.lower()
         records.append(
             MemoryRecord(
                 type="fact",
                 canonical_value=f"{owner} has {object_name}",
                 confidence=0.65,
-                evidence_refs=[f"object-has:{owner}:{object_name.lower()}"],
-                attributes={"name": owner, "object": object_name.lower(), "object_state": "has"},
+                evidence_refs=[f"object-has:{owner}:{object_name}"],
+                attributes={"name": owner, "object": object_name, "object_state": "has"},
             )
         )
 

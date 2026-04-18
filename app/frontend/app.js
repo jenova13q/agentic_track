@@ -1,8 +1,6 @@
 const state = {
   currentStoryId: null,
   stories: [],
-  writingSession: null,
-  sessionIndex: 0,
 };
 
 const el = {
@@ -128,7 +126,12 @@ async function ingestStory() {
     body: JSON.stringify({ title: el.storyTitle.value, text: el.storyText.value }),
   });
   state.currentStoryId = payload.story_id;
-  renderMessage("История создана", { explanation: `Создана история ${payload.title}`, status: "info", issue_type: "n/a", stop_reason: "ingested" });
+  renderMessage("История создана", {
+    explanation: `Создана история ${payload.title}`,
+    status: "info",
+    issue_type: "n/a",
+    stop_reason: "ingested",
+  });
   await refreshStories();
   await selectStory(payload.story_id);
 }
@@ -142,7 +145,7 @@ async function analyzeScene() {
     method: "POST",
     body: JSON.stringify({
       scene_text: el.sceneText.value,
-      question: el.sceneQuestion.value,
+      question: el.sceneQuestion.value.trim() || null,
     }),
   });
   renderMessage("Ответ агента", payload);
@@ -167,47 +170,10 @@ async function appendScene() {
   await refreshStoryDetails();
 }
 
-async function loadDemoStory() {
-  const payload = await api("/demo/story");
-  el.storyText.value = payload.text;
-}
-
-async function loadWritingSession() {
-  state.writingSession = await api("/demo/writing-session");
-  state.sessionIndex = 0;
-  el.storyTitle.value = state.writingSession.title;
-  el.storyText.value = state.writingSession.initial_draft.join("\n\n");
-  el.sceneText.value = "";
-  renderMessage("Writer session загружена", {
-    explanation: "Черновик и demo-кусочки загружены. Можно создать историю и затем подставлять следующий фрагмент.",
-    status: "info",
-    issue_type: "n/a",
-    stop_reason: "demo_loaded",
-  });
-}
-
-function applyNextSessionChunk() {
-  if (!state.writingSession) {
-    alert("Сначала загрузите writer session.");
-    return;
-  }
-  const item = state.writingSession.writer_chunks[state.sessionIndex];
-  if (!item) {
-    alert("Больше demo-кусочков нет.");
-    return;
-  }
-  el.sceneText.value = item.scene_text;
-  el.sceneQuestion.value = `Это ${item.kind} chunk. Проверь сцену на консистентность и объясни вывод.`;
-  state.sessionIndex += 1;
-}
-
-document.getElementById("load-demo-story").addEventListener("click", loadDemoStory);
-document.getElementById("load-writing-session").addEventListener("click", loadWritingSession);
 document.getElementById("refresh-stories").addEventListener("click", refreshStories);
 document.getElementById("ingest-story").addEventListener("click", ingestStory);
 document.getElementById("analyze-scene").addEventListener("click", analyzeScene);
 document.getElementById("append-scene").addEventListener("click", appendScene);
-document.getElementById("apply-session-chunk").addEventListener("click", applyNextSessionChunk);
 
 refreshStories();
 refreshObservability();

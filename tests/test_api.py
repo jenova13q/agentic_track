@@ -220,6 +220,23 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "conflict")
         self.assertIn(payload["issue_type"], {"object", "mixed"})
 
+    def test_object_state_conflict_is_detected_for_vynul_phrase(self) -> None:
+        story_id = self._ingest_story(
+            text=(
+                "Оказалось, что в тот вечер Лев потерял ключ у пристани. "
+                "Он его долго искал, но так и не нашел."
+            )
+        )
+
+        response = self.client.post(
+            f"/stories/{story_id}/analyze",
+            json={"scene_text": "На острове Лев вынул ключ из кармана и открыл деревянную дверь."},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "conflict")
+        self.assertIn(payload["issue_type"], {"object", "mixed"})
+
     def _ingest_story(self, text: str) -> str:
         response = self.client.post(
             "/stories/ingest",

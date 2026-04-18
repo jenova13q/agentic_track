@@ -4,23 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Story Consistency Agent</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260418a">
 </head>
 <body>
   <div class="layout">
     <aside class="panel sidebar">
       <h1>Story Consistency Agent</h1>
-      <p class="muted">Минимальный demo-клиент без перезагрузки страниц.</p>
+      <p class="muted">Базовый интерфейс для автора: загрузите текст, добавьте новый фрагмент и получите подсказку агента без перезагрузки страницы.</p>
 
       <div class="stack">
-        <button id="load-demo-story">Загрузить demo-story</button>
-        <button id="load-writing-session">Загрузить writer session</button>
         <button id="refresh-stories" class="secondary">Обновить список историй</button>
       </div>
 
       <label class="field">
         <span>Название истории</span>
-        <input id="story-title" type="text" value="Колокол без моря">
+        <input id="story-title" type="text" value="">
       </label>
 
       <label class="field">
@@ -55,12 +53,11 @@
           <textarea id="scene-text" rows="8"></textarea>
         </label>
         <label class="field">
-          <span>Вопрос агенту</span>
-          <input id="scene-question" type="text" value="Проверь сцену на консистентность, скажи conflict/no_conflict/uncertain и объясни почему.">
+          <span>Дополнительный комментарий для агента, если нужен</span>
+          <input id="scene-question" type="text" value="" placeholder="Необязательно">
         </label>
         <div class="stack horizontal">
           <button id="analyze-scene">Проверить сцену</button>
-          <button id="apply-session-chunk" class="secondary">Подставить следующий demo-кусок</button>
         </div>
       </section>
 
@@ -88,6 +85,6 @@
     </aside>
   </div>
 
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=20260418a" defer></script>
 </body>
 </html>
