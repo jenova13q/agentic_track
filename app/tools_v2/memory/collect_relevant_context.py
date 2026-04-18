@@ -2,7 +2,7 @@
 
 from app.storage.service import StoryMemoryDataService
 from app.tools_v2.contracts import ContextCollectionResult
-from app.tools_v2.helpers import canonicalize, extract_names, extract_pronouns
+from app.tools_v2.helpers import canonicalize, extract_names, extract_pronouns, extract_scene_candidates
 
 
 class CollectRelevantContextTool:
@@ -14,12 +14,30 @@ class CollectRelevantContextTool:
     def run(self, story_id: str, scene_text: str) -> ContextCollectionResult:
         names = extract_names(scene_text)
         pronouns = extract_pronouns(scene_text)
+        extraction = extract_scene_candidates(scene_text)
         matched_entity_bundles = []
         seen_entity_ids: set[str] = set()
         chunk_windows = []
 
         for name in names:
             entity = self.data_service.find_entity_by_name(story_id=story_id, canonical_name=canonicalize(name))
+            if entity is None or entity.id in seen_entity_ids:
+                continue
+            seen_entity_ids.add(entity.id)
+            bundle = self.data_service.get_entity_bundle(entity.id)
+            if bundle is not None:
+                matched_entity_bundles.append(bundle)
+                for evidence in bundle.evidence_links[:1]:
+                    window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1)
+                    if window is not None:
+                        chunk_windows.append(window)
+
+        for candidate in extraction.objects:
+            entity = self.data_service.find_entity_by_name(
+                story_id=story_id,
+                canonical_name=candidate.canonical_name,
+                entity_kind='object',
+            )
             if entity is None or entity.id in seen_entity_ids:
                 continue
             seen_entity_ids.add(entity.id)
