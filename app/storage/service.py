@@ -157,6 +157,27 @@ class StoryMemoryDataService:
         finally:
             connection.close()
 
+    def list_events(self, story_id: str, status: str | None = None):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.list_events(story_id=story_id, status=status)
+        finally:
+            connection.close()
+
+    def list_facts(self, story_id: str, status: str | None = None):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.list_facts(story_id=story_id, status=status)
+        finally:
+            connection.close()
+
+    def list_relations(self, story_id: str, status: str | None = None):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.list_relations(story_id=story_id, status=status)
+        finally:
+            connection.close()
+
     def list_stories(self):
         connection, story_repo, _ = self._repos()
         try:

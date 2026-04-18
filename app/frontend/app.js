@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   currentStoryId: null,
   stories: [],
 };
@@ -40,7 +40,7 @@ function renderStories() {
     li.className = story.story_id === state.currentStoryId ? "active" : "";
     li.innerHTML = `
       <strong>${story.title}</strong><br>
-      <span class="muted">chunks: ${story.chunk_count}, pending: ${story.pending_update_count}</span>
+      <span class="muted">confirmed fragments: ${story.confirmed_fragment_count}, chunks: ${story.total_chunk_count}, pending: ${story.pending_update_count}</span>
     `;
     li.addEventListener("click", () => selectStory(story.story_id));
     el.stories.appendChild(li);
@@ -50,13 +50,16 @@ function renderStories() {
 function renderMessage(title, payload) {
   const article = document.createElement("article");
   article.className = "message";
-  const toolNames = (payload.tool_traces || []).map((trace) => trace.tool_name).join(", ");
+  const extracted = payload.extracted_counts
+    ? `extracted: chars ${payload.extracted_counts.characters || 0}, objects ${payload.extracted_counts.objects || 0}, events ${payload.extracted_counts.events || 0}, facts ${payload.extracted_counts.facts || 0}`
+    : "";
   article.innerHTML = `
     <div class="meta">${title}</div>
     <div><strong class="status ${payload.status || "none"}">${payload.status || "info"}</strong> · ${payload.issue_type || "n/a"} · stop: ${payload.stop_reason || "n/a"}</div>
     <p>${payload.explanation || ""}</p>
-    <div class="muted">mode: ${payload.orchestrator_mode || "n/a"} · steps: ${payload.agent_step_count || 0} · tools: ${payload.tool_call_count || 0}</div>
-    <div class="muted">tool traces: ${toolNames || "n/a"}</div>
+    <div class="muted">mode: ${payload.orchestrator_mode || "n/a"} · steps: ${payload.step_count || 0}</div>
+    <div class="muted">${extracted}</div>
+    <div class="muted">staged update: ${payload.staged_update_id || payload.pending_update_id || "n/a"}</div>
   `;
   el.messages.prepend(article);
 }
@@ -74,7 +77,7 @@ function renderPendingUpdates(story) {
     card.className = "update-card";
     card.innerHTML = `
       <strong>${update.summary}</strong>
-      <div class="muted">changes: ${update.changes.length}</div>
+      <div class="muted">items: ${update.item_count}</div>
       <div class="stack horizontal">
         <button class="success" data-action="confirm">Confirm</button>
         <button class="danger" data-action="reject">Reject</button>
@@ -109,7 +112,7 @@ async function selectStory(storyId) {
   state.currentStoryId = storyId;
   const story = await api(`/stories/${storyId}`);
   el.currentStory.textContent = `${story.title} · ${story.story_id.slice(0, 8)}`;
-  el.sessionHint.textContent = `Chunks: ${story.chunk_count}, memory records: ${story.memory.length}`;
+  el.sessionHint.textContent = `confirmed fragments: ${story.confirmed_fragment_count}, pending fragments: ${story.pending_fragment_count}, chunks: ${story.total_chunk_count}, memory: ${JSON.stringify(story.memory_counts)}`;
   renderPendingUpdates(story);
   await refreshStories();
   await refreshObservability();
@@ -127,10 +130,12 @@ async function ingestStory() {
   });
   state.currentStoryId = payload.story_id;
   renderMessage("История создана", {
-    explanation: `Создана история ${payload.title}`,
-    status: "info",
-    issue_type: "n/a",
+    explanation: `История ${payload.title} создана. Исходный текст отправлен на анализ и staged в pending update.`,
+    status: payload.initial_analysis_status,
+    issue_type: "none",
     stop_reason: "ingested",
+    orchestrator_mode: payload.orchestrator_mode,
+    pending_update_id: payload.pending_update_id,
   });
   await refreshStories();
   await selectStory(payload.story_id);
@@ -152,28 +157,9 @@ async function analyzeScene() {
   await refreshStoryDetails();
 }
 
-async function appendScene() {
-  if (!state.currentStoryId) {
-    alert("Сначала создайте или выберите историю.");
-    return;
-  }
-  const payload = await api(`/stories/${state.currentStoryId}/append-scene`, {
-    method: "POST",
-    body: JSON.stringify({ scene_text: el.sceneText.value }),
-  });
-  renderMessage("Фрагмент принят в историю", {
-    explanation: `Добавлен новый фрагмент. Chunk count: ${payload.chunk_count}, appended memory: ${payload.appended_memory_count}.`,
-    status: "info",
-    issue_type: "n/a",
-    stop_reason: "appended",
-  });
-  await refreshStoryDetails();
-}
-
 document.getElementById("refresh-stories").addEventListener("click", refreshStories);
 document.getElementById("ingest-story").addEventListener("click", ingestStory);
 document.getElementById("analyze-scene").addEventListener("click", analyzeScene);
-document.getElementById("append-scene").addEventListener("click", appendScene);
 
 refreshStories();
 refreshObservability();

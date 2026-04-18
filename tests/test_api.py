@@ -1,246 +1,199 @@
-import tempfile
+﻿import tempfile
 import unittest
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.agent.orchestrator import DemoOrchestrator
+from app.agent_v2 import LLMAdapterV2, StoryConsistencyOrchestratorV2
 from app.api import routes
 from app.main import app
-from app.memory.store import StoryStore
 from app.observability.service import ObservabilityStore
+from app.storage import Database, StoryMemoryDataService
 
 
 class StoryApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.store = StoryStore(base_dir=Path(self.temp_dir.name))
-        self.observability = ObservabilityStore(base_dir=Path(self.temp_dir.name) / "telemetry")
-        routes.store = self.store
-        routes.orchestrator = DemoOrchestrator(store=self.store)
+        db_path = Path(self.temp_dir.name) / 'api_story_memory.sqlite3'
+        self.data_service = StoryMemoryDataService(database=Database(db_path))
+        self.observability = ObservabilityStore(base_dir=Path(self.temp_dir.name) / 'telemetry')
+        self.adapter = LLMAdapterV2()
+        self.adapter.api_key = None
+        self.orchestrator = StoryConsistencyOrchestratorV2(data_service=self.data_service, llm_adapter=self.adapter)
+        routes.data_service = self.data_service
+        routes.orchestrator_v2 = self.orchestrator
         routes.observability = self.observability
-        routes.orchestrator.llm.openai_api_key = None
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
     def test_health_endpoint(self) -> None:
-        response = self.client.get("/health")
-
+        response = self.client.get('/health')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
-        self.assertIn("X-Request-ID", response.headers)
+        self.assertEqual(response.json(), {'status': 'ok'})
 
-    def test_root_serves_demo_ui(self) -> None:
-        response = self.client.get("/")
+    def test_root_serves_ui(self) -> None:
+        response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Story Consistency Agent", response.text)
+        self.assertIn('Story Consistency Agent', response.text)
+        self.assertIn('Создать историю и проверить текст', response.text)
 
-    def test_ingest_and_list_story(self) -> None:
-        ingest_response = self.client.post(
-            "/stories/ingest",
-            json={
-                "title": "Demo Story",
-                "text": (
-                    "Day 1. Anna lives in Tashkent. Anna is brave.\n\n"
-                    "Day 2. Boris lives in Samarkand. Boris is kind."
-                ),
-            },
-        )
-
-        self.assertEqual(ingest_response.status_code, 200)
-        payload = ingest_response.json()
-        self.assertEqual(payload["status"], "ingested")
-        self.assertGreaterEqual(payload["chunk_count"], 1)
-
-        list_response = self.client.get("/stories")
-        self.assertEqual(list_response.status_code, 200)
-        stories = list_response.json()["stories"]
-        self.assertEqual(len(stories), 1)
-        self.assertEqual(stories[0]["title"], "Demo Story")
-
-    def test_analyze_scene_returns_conflict(self) -> None:
-        story_id = self._ingest_story(
-            text=(
-                "Day 1. Anna lives in Tashkent. Anna is brave.\n\n"
-                "Day 2. Anna meets Boris."
-            )
-        )
-
+    def test_ingest_creates_story_and_pending_update(self) -> None:
         response = self.client.post(
-            f"/stories/{story_id}/analyze",
+            '/stories/ingest',
             json={
-                "scene_text": "Day 2. Anna lives in Samarkand. Anna is cowardly.",
+                'title': 'Колокол без моря',
+                'text': 'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.',
             },
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["status"], "conflict")
-        self.assertIn(payload["issue_type"], {"fact", "character", "mixed"})
-        self.assertTrue(payload["tool_traces"])
-        self.assertIn(payload["orchestrator_mode"], {"heuristic", "llm"})
-        self.assertGreaterEqual(payload["agent_step_count"], 1)
-        self.assertGreaterEqual(payload["tool_call_count"], 1)
+        self.assertEqual('ingested', payload['status'])
+        self.assertEqual('no_conflict', payload['initial_analysis_status'])
+        self.assertIsNotNone(payload['pending_update_id'])
 
-    def test_analyze_scene_creates_pending_update_and_confirm_promotes_it(self) -> None:
-        story_id = self._ingest_story(
-            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        story = self.client.get(f"/stories/{payload['story_id']}").json()
+        self.assertEqual(1, story['pending_fragment_count'])
+        self.assertEqual(1, len(story['pending_updates']))
+
+    def test_analyze_scene_can_stage_pending_update(self) -> None:
+        story_id = self._create_empty_story()
+
+        response = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.'},
         )
 
-        analyze_response = self.client.post(
-            f"/stories/{story_id}/analyze",
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual('no_conflict', payload['status'])
+        self.assertIsNotNone(payload['staged_update_id'])
+        self.assertGreaterEqual(payload['staged_item_counts']['entities'], 2)
+
+    def test_analyze_scene_detects_object_conflict(self) -> None:
+        story_id = self._create_story_with_confirmed_loss()
+
+        response = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'На острове Лев вынул ключ из кармана и открыл дверь.'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual('conflict', payload['status'])
+        self.assertEqual('object', payload['issue_type'])
+        self.assertIsNone(payload['staged_update_id'])
+
+    def test_confirm_pending_update_promotes_fragment_and_memory(self) -> None:
+        ingest = self.client.post(
+            '/stories/ingest',
             json={
-                "scene_text": "Day 2. Boris lives in Samarkand. Boris is kind.",
+                'title': 'Колокол без моря',
+                'text': 'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.',
             },
         )
+        story_id = ingest.json()['story_id']
+        update_id = ingest.json()['pending_update_id']
 
-        self.assertEqual(analyze_response.status_code, 200)
-        analyze_payload = analyze_response.json()
-        proposal_id = analyze_payload["memory_update_proposal_id"]
-        self.assertIsNotNone(proposal_id)
+        confirm = self.client.post(f'/stories/{story_id}/pending-updates/{update_id}/confirm')
+        self.assertEqual(confirm.status_code, 200)
+        self.assertEqual('confirmed', confirm.json()['status'])
+        self.assertGreaterEqual(len(confirm.json()['promoted_memory_ids']), 1)
 
-        story_before_confirm = self.client.get(f"/stories/{story_id}").json()
-        self.assertEqual(len(story_before_confirm["pending_updates"]), 1)
-
-        confirm_response = self.client.post(
-            f"/stories/{story_id}/pending-updates/{proposal_id}/confirm"
-        )
-        self.assertEqual(confirm_response.status_code, 200)
-        confirm_payload = confirm_response.json()
-        self.assertEqual(confirm_payload["status"], "confirmed")
-        self.assertGreaterEqual(len(confirm_payload["promoted_memory_ids"]), 1)
-
-        story_after_confirm = self.client.get(f"/stories/{story_id}").json()
-        confirmed_facts = [
-            item for item in story_after_confirm["memory"] if item["attributes"].get("name") == "Boris"
-        ]
-        self.assertTrue(confirmed_facts)
+        story = self.client.get(f'/stories/{story_id}').json()
+        self.assertEqual(1, story['confirmed_fragment_count'])
+        self.assertEqual(0, story['pending_fragment_count'])
+        self.assertEqual(0, len([item for item in story['pending_updates'] if item['status'] == 'pending']))
 
     def test_reject_pending_update_marks_it_rejected(self) -> None:
-        story_id = self._ingest_story(
-            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        ingest = self.client.post(
+            '/stories/ingest',
+            json={
+                'title': 'Колокол без моря',
+                'text': 'Павел принёс колокол с острова.',
+            },
+        )
+        story_id = ingest.json()['story_id']
+        update_id = ingest.json()['pending_update_id']
+
+        reject = self.client.post(f'/stories/{story_id}/pending-updates/{update_id}/reject')
+        self.assertEqual(reject.status_code, 200)
+        self.assertEqual('rejected', reject.json()['status'])
+
+        story = self.client.get(f'/stories/{story_id}').json()
+        rejected = [item for item in story['pending_updates'] if item['id'] == update_id]
+        self.assertEqual(1, len(rejected))
+        self.assertEqual('rejected', rejected[0]['status'])
+
+    def test_observability_endpoints_show_analysis_activity(self) -> None:
+        story_id = self._create_empty_story()
+        self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Лев встретил Павла у пристани.'},
         )
 
-        analyze_response = self.client.post(
-            f"/stories/{story_id}/analyze",
-            json={"scene_text": "Day 2. Boris lives in Samarkand. Boris is kind."},
+        summary = self.client.get('/observability/summary')
+        traces = self.client.get('/observability/traces')
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(traces.status_code, 200)
+        self.assertEqual(1, summary.json()['analysis_requests'])
+        self.assertEqual(1, len(traces.json()['traces']))
+
+    def _create_empty_story(self) -> str:
+        story = self.data_service.create_story(title='Рабочая история')
+        return story.id
+
+    def _create_story_with_confirmed_loss(self) -> str:
+        story = self.data_service.create_story(title='Рабочая история')
+        fragment = self.data_service.add_fragment(
+            story_id=story.id,
+            text='Перед отплытием Лев потерял ключ у пристани.',
+            fragment_kind='scene',
+            status='confirmed',
+            source_label='scene:1',
+            fragment_order=0,
         )
-        self.assertEqual(analyze_response.status_code, 200)
-        proposal_id = analyze_response.json()["memory_update_proposal_id"]
-        self.assertIsNotNone(proposal_id)
-
-        reject_response = self.client.post(
-            f"/stories/{story_id}/pending-updates/{proposal_id}/reject"
+        chunk = self.data_service.add_chunk(
+            story_id=story.id,
+            fragment_id=fragment.id,
+            chunk_index=0,
+            source_ref='chunk:0',
+            text='Перед отплытием Лев потерял ключ у пристани.',
+            token_count=6,
         )
-        self.assertEqual(reject_response.status_code, 200)
-        self.assertEqual(reject_response.json()["status"], "rejected")
-
-        story_after_reject = self.client.get(f"/stories/{story_id}").json()
-        rejected = [
-            update for update in story_after_reject["pending_updates"] if update["id"] == proposal_id
-        ]
-        self.assertEqual(len(rejected), 1)
-        self.assertEqual(rejected[0]["status"], "rejected")
-
-    def test_analyze_scene_returns_uncertain_when_memory_is_irrelevant(self) -> None:
-        story_id = self._ingest_story(
-            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        lev = self.data_service.create_entity(
+            story_id=story.id,
+            entity_kind='character',
+            name='Лев',
+            canonical_name='лев',
+            summary='Главный герой.',
+            status='confirmed',
+            confidence=0.9,
         )
-
-        response = self.client.post(
-            f"/stories/{story_id}/analyze",
-            json={"scene_text": "Quantum satellites collapse into mirrors."},
+        key = self.data_service.create_entity(
+            story_id=story.id,
+            entity_kind='object',
+            name='ключ',
+            canonical_name='ключ',
+            summary='Старый ключ.',
+            status='confirmed',
+            confidence=0.9,
         )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "uncertain")
-        self.assertEqual(payload["stop_reason"], "insufficient_evidence")
-        self.assertGreaterEqual(payload["agent_step_count"], 1)
-
-    def test_observability_summary_and_traces_capture_analysis(self) -> None:
-        story_id = self._ingest_story(
-            text="Day 1. Anna lives in Tashkent. Anna is brave."
+        self.data_service.upsert_object_profile(entity_id=key.id, description='Старый ключ.', current_state_summary='Потерян у пристани.')
+        self.data_service.create_fact(
+            story_id=story.id,
+            fact_kind='object_state',
+            summary='Лев потерял ключ у пристани.',
+            subject_entity_id=lev.id,
+            object_entity_id=key.id,
+            status='confirmed',
+            confidence=0.95,
         )
+        self.data_service.add_evidence_link(story_id=story.id, target_table='entity', target_id=key.id, chunk_id=chunk.id)
+        return story.id
 
-        analyze_response = self.client.post(
-            f"/stories/{story_id}/analyze",
-            json={"scene_text": "Day 2. Anna is cowardly."},
-        )
-        self.assertEqual(analyze_response.status_code, 200)
 
-        summary_response = self.client.get("/observability/summary")
-        self.assertEqual(summary_response.status_code, 200)
-        summary = summary_response.json()
-        self.assertEqual(summary["analysis_requests"], 1)
-        self.assertEqual(summary["conflict_count"], 1)
-        self.assertGreaterEqual(summary["average_tool_calls"], 1.0)
-        self.assertIn("conflict_detected", summary["last_stop_reasons"])
-
-        traces_response = self.client.get("/observability/traces")
-        self.assertEqual(traces_response.status_code, 200)
-        traces = traces_response.json()["traces"]
-        self.assertEqual(len(traces), 1)
-        self.assertEqual(traces[0]["event_type"], "analysis")
-        self.assertEqual(traces[0]["status"], "conflict")
-
-    def test_append_scene_adds_chunk_and_memory(self) -> None:
-        story_id = self._ingest_story(
-            text="Лев живёт в Приморске. Лев был смелый."
-        )
-
-        append_response = self.client.post(
-            f"/stories/{story_id}/append-scene",
-            json={"scene_text": "Тем же вечером Лев потерял ручку."},
-        )
-        self.assertEqual(append_response.status_code, 200)
-        payload = append_response.json()
-        self.assertEqual(payload["status"], "appended")
-        self.assertGreaterEqual(payload["chunk_count"], 2)
-
-        story = self.client.get(f"/stories/{story_id}").json()
-        object_facts = [
-            item for item in story["memory"] if item["attributes"].get("object") == "ручку"
-        ]
-        self.assertTrue(object_facts)
-
-    def test_object_state_conflict_is_detected(self) -> None:
-        story_id = self._ingest_story(
-            text="Тем же вечером Лев потерял ручку."
-        )
-
-        response = self.client.post(
-            f"/stories/{story_id}/analyze",
-            json={"scene_text": "На следующее утро Лев достал ручку."},
-        )
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "conflict")
-        self.assertIn(payload["issue_type"], {"object", "mixed"})
-
-    def test_object_state_conflict_is_detected_for_vynul_phrase(self) -> None:
-        story_id = self._ingest_story(
-            text=(
-                "Оказалось, что в тот вечер Лев потерял ключ у пристани. "
-                "Он его долго искал, но так и не нашел."
-            )
-        )
-
-        response = self.client.post(
-            f"/stories/{story_id}/analyze",
-            json={"scene_text": "На острове Лев вынул ключ из кармана и открыл деревянную дверь."},
-        )
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "conflict")
-        self.assertIn(payload["issue_type"], {"object", "mixed"})
-
-    def _ingest_story(self, text: str) -> str:
-        response = self.client.post(
-            "/stories/ingest",
-            json={"title": "Base Story", "text": text},
-        )
-        self.assertEqual(response.status_code, 200)
-        return response.json()["story_id"]
+if __name__ == '__main__':
+    unittest.main()

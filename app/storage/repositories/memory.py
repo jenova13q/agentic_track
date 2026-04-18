@@ -91,6 +91,19 @@ class StoryMemoryRepository:
         row = self.connection.execute("SELECT id, story_id, title, summary, timeline_note, anchor_event_id, temporal_relation, sequence_hint, fragment_id, status, confidence, created_at, updated_at, attributes_json FROM events WHERE id = ?", (event_id,)).fetchone()
         return row_to_model(EventRecord, row) if row else None
 
+    def list_events(self, story_id: str, status: str | None = None) -> list[EventRecord]:
+        if status is None:
+            rows = self.connection.execute(
+                "SELECT id, story_id, title, summary, timeline_note, anchor_event_id, temporal_relation, sequence_hint, fragment_id, status, confidence, created_at, updated_at, attributes_json FROM events WHERE story_id = ? ORDER BY created_at",
+                (story_id,),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                "SELECT id, story_id, title, summary, timeline_note, anchor_event_id, temporal_relation, sequence_hint, fragment_id, status, confidence, created_at, updated_at, attributes_json FROM events WHERE story_id = ? AND status = ? ORDER BY created_at",
+                (story_id, status),
+            ).fetchall()
+        return [row_to_model(EventRecord, row) for row in rows]
+
     def add_event_entity(self, event_id: str, entity_id: str, role: str = 'participant') -> None:
         self.connection.execute("INSERT OR IGNORE INTO event_entities(event_id, entity_id, role) VALUES (?, ?, ?)", (event_id, entity_id, role))
         self.connection.commit()
@@ -115,6 +128,19 @@ class StoryMemoryRepository:
         row = self.connection.execute("SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE id = ?", (fact_id,)).fetchone()
         return row_to_model(FactRecord, row) if row else None
 
+    def list_facts(self, story_id: str, status: str | None = None) -> list[FactRecord]:
+        if status is None:
+            rows = self.connection.execute(
+                "SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE story_id = ? ORDER BY created_at",
+                (story_id,),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                "SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE story_id = ? AND status = ? ORDER BY created_at",
+                (story_id, status),
+            ).fetchall()
+        return [row_to_model(FactRecord, row) for row in rows]
+
     def list_facts_for_entity(self, entity_id: str, status: str | None = None) -> list[FactRecord]:
         if status is None:
             rows = self.connection.execute("SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE subject_entity_id = ? OR object_entity_id = ? ORDER BY created_at", (entity_id, entity_id)).fetchall()
@@ -134,6 +160,19 @@ class StoryMemoryRepository:
     def get_relation(self, relation_id: str) -> RelationRecord | None:
         row = self.connection.execute("SELECT id, story_id, left_entity_id, right_entity_id, relation_kind, summary, status, confidence, created_at, updated_at, attributes_json FROM relations WHERE id = ?", (relation_id,)).fetchone()
         return row_to_model(RelationRecord, row) if row else None
+
+    def list_relations(self, story_id: str, status: str | None = None) -> list[RelationRecord]:
+        if status is None:
+            rows = self.connection.execute(
+                "SELECT id, story_id, left_entity_id, right_entity_id, relation_kind, summary, status, confidence, created_at, updated_at, attributes_json FROM relations WHERE story_id = ? ORDER BY created_at",
+                (story_id,),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                "SELECT id, story_id, left_entity_id, right_entity_id, relation_kind, summary, status, confidence, created_at, updated_at, attributes_json FROM relations WHERE story_id = ? AND status = ? ORDER BY created_at",
+                (story_id, status),
+            ).fetchall()
+        return [row_to_model(RelationRecord, row) for row in rows]
 
     def list_relations_for_entity(self, entity_id: str, status: str | None = None) -> list[RelationRecord]:
         if status is None:
