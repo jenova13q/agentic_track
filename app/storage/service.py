@@ -97,10 +97,24 @@ class StoryMemoryDataService:
         finally:
             connection.close()
 
+    def get_pending_update(self, update_id: str):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.get_pending_update(update_id)
+        finally:
+            connection.close()
+
     def add_pending_update_item(self, **kwargs):
         connection, _, memory_repo = self._repos()
         try:
             return memory_repo.add_pending_update_item(**kwargs)
+        finally:
+            connection.close()
+
+    def list_pending_update_items(self, pending_update_id: str):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.list_pending_update_items(pending_update_id)
         finally:
             connection.close()
 
