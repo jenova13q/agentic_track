@@ -166,6 +166,27 @@ class StoryMemoryRepository:
         row = self.connection.execute("SELECT id, story_id, fragment_id, summary, status, created_at, updated_at FROM pending_updates WHERE id = ?", (update_id,)).fetchone()
         return row_to_model(PendingUpdateRecord, row) if row else None
 
+    def list_pending_updates(self, story_id: str, status: str | None = None) -> list[PendingUpdateRecord]:
+        if status is None:
+            rows = self.connection.execute(
+                "SELECT id, story_id, fragment_id, summary, status, created_at, updated_at FROM pending_updates WHERE story_id = ? ORDER BY created_at DESC",
+                (story_id,),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                "SELECT id, story_id, fragment_id, summary, status, created_at, updated_at FROM pending_updates WHERE story_id = ? AND status = ? ORDER BY created_at DESC",
+                (story_id, status),
+            ).fetchall()
+        return [row_to_model(PendingUpdateRecord, row) for row in rows]
+
+    def set_pending_update_status(self, update_id: str, status: str) -> PendingUpdateRecord | None:
+        self.connection.execute(
+            "UPDATE pending_updates SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, update_id),
+        )
+        self.connection.commit()
+        return self.get_pending_update(update_id)
+
     def add_pending_update_item(self, pending_update_id: str, item_type: str, item_id: str, action: str, summary: str, link_id: str | None = None) -> PendingUpdateItemRecord:
         link_id = link_id or str(uuid4())
         self.connection.execute("INSERT INTO pending_update_items(id, pending_update_id, item_type, item_id, action, summary) VALUES (?, ?, ?, ?, ?, ?)", (link_id, pending_update_id, item_type, item_id, action, summary))
@@ -179,6 +200,21 @@ class StoryMemoryRepository:
     def list_pending_update_items(self, pending_update_id: str) -> list[PendingUpdateItemRecord]:
         rows = self.connection.execute("SELECT id, pending_update_id, item_type, item_id, action, summary FROM pending_update_items WHERE pending_update_id = ? ORDER BY id", (pending_update_id,)).fetchall()
         return [row_to_model(PendingUpdateItemRecord, row) for row in rows]
+
+    def set_record_status(self, item_type: str, item_id: str, status: str) -> None:
+        table_map = {
+            'entity': 'entities',
+            'event': 'events',
+            'fact': 'facts',
+            'relation': 'relations',
+        }
+        table_name = table_map.get(item_type)
+        if table_name is None:
+            return
+        self.connection.execute(
+            f"UPDATE {table_name} SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, item_id),
+        )
 
     def get_entity_bundle(self, entity_id: str) -> EntityBundle | None:
         entity = self.get_entity(entity_id)

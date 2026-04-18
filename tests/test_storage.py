@@ -191,6 +191,84 @@ class StoryMemoryDataServiceTests(unittest.TestCase):
         self.assertEqual(update.id, item.pending_update_id)
         self.assertEqual('entity', item.item_type)
 
+    def test_can_confirm_pending_update_and_promote_fragment_and_records(self) -> None:
+        story = self.service.create_story(title='Колокол без моря')
+        fragment = self.service.add_fragment(
+            story_id=story.id,
+            text='Лев потерял ключ у пристани.',
+            fragment_kind='scene',
+            status='pending',
+            source_label='submission:2',
+        )
+        entity = self.service.create_entity(
+            story_id=story.id,
+            entity_kind='object',
+            name='ключ',
+            canonical_name='ключ',
+            summary='Ключ от дома на острове.',
+            status='pending',
+            confidence=0.7,
+        )
+        update = self.service.create_pending_update(
+            story_id=story.id,
+            fragment_id=fragment.id,
+            summary='Добавить сцену и объект ключ.',
+        )
+        self.service.add_pending_update_item(
+            pending_update_id=update.id,
+            item_type='entity',
+            item_id=entity.id,
+            action='create',
+            summary='Создать объект ключ.',
+        )
+
+        confirmed = self.service.confirm_pending_update(update.id)
+
+        self.assertIsNotNone(confirmed)
+        assert confirmed is not None
+        self.assertEqual('confirmed', confirmed.status)
+        self.assertEqual('confirmed', self.service.list_fragments(story.id)[0].status)
+        self.assertEqual('confirmed', self.service.list_entities(story.id)[0].status)
+
+    def test_can_reject_pending_update_and_mark_records_rejected(self) -> None:
+        story = self.service.create_story(title='Колокол без моря')
+        fragment = self.service.add_fragment(
+            story_id=story.id,
+            text='Павел принёс чужой колокол.',
+            fragment_kind='scene',
+            status='pending',
+            source_label='submission:3',
+        )
+        entity = self.service.create_entity(
+            story_id=story.id,
+            entity_kind='object',
+            name='колокол',
+            canonical_name='колокол',
+            summary='Старый корабельный колокол.',
+            status='pending',
+            confidence=0.62,
+        )
+        update = self.service.create_pending_update(
+            story_id=story.id,
+            fragment_id=fragment.id,
+            summary='Добавить колокол.',
+        )
+        self.service.add_pending_update_item(
+            pending_update_id=update.id,
+            item_type='entity',
+            item_id=entity.id,
+            action='create',
+            summary='Создать объект колокол.',
+        )
+
+        rejected = self.service.reject_pending_update(update.id)
+
+        self.assertIsNotNone(rejected)
+        assert rejected is not None
+        self.assertEqual('rejected', rejected.status)
+        self.assertEqual('rejected', self.service.list_fragments(story.id)[0].status)
+        self.assertEqual('rejected', self.service.list_entities(story.id)[0].status)
+
 
 if __name__ == '__main__':
     unittest.main()

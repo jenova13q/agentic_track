@@ -177,3 +177,55 @@ class StoryMemoryDataService:
             return story_repo.list_chunks(story_id=story_id)
         finally:
             connection.close()
+
+    def list_pending_updates(self, story_id: str, status: str | None = None):
+        connection, _, memory_repo = self._repos()
+        try:
+            return memory_repo.list_pending_updates(story_id=story_id, status=status)
+        finally:
+            connection.close()
+
+    def confirm_pending_update(self, update_id: str):
+        connection, story_repo, memory_repo = self._repos()
+        try:
+            update = memory_repo.get_pending_update(update_id)
+            if update is None:
+                return None
+
+            for item in memory_repo.list_pending_update_items(update_id):
+                if item.item_type != "fragment":
+                    memory_repo.set_record_status(item.item_type, item.item_id, "confirmed")
+
+            if update.fragment_id is not None:
+                fragment = story_repo.get_fragment(update.fragment_id)
+                if fragment is not None:
+                    fragment_order = fragment.fragment_order
+                    if fragment_order is None:
+                        fragment_order = story_repo.next_confirmed_fragment_order(fragment.story_id)
+                    story_repo.set_fragment_status(fragment.id, "confirmed", fragment_order=fragment_order)
+
+            connection.commit()
+            return memory_repo.set_pending_update_status(update_id, "confirmed")
+        finally:
+            connection.close()
+
+    def reject_pending_update(self, update_id: str):
+        connection, story_repo, memory_repo = self._repos()
+        try:
+            update = memory_repo.get_pending_update(update_id)
+            if update is None:
+                return None
+
+            for item in memory_repo.list_pending_update_items(update_id):
+                if item.item_type != "fragment":
+                    memory_repo.set_record_status(item.item_type, item.item_id, "rejected")
+
+            if update.fragment_id is not None:
+                fragment = story_repo.get_fragment(update.fragment_id)
+                if fragment is not None:
+                    story_repo.set_fragment_status(fragment.id, "rejected")
+
+            connection.commit()
+            return memory_repo.set_pending_update_status(update_id, "rejected")
+        finally:
+            connection.close()

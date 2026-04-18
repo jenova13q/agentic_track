@@ -67,6 +67,20 @@ class StoryRepository:
         ).fetchone()
         return row_to_model(FragmentRecord, row) if row else None
 
+    def set_fragment_status(self, fragment_id: str, status: str, fragment_order: int | None = None) -> FragmentRecord | None:
+        if fragment_order is None:
+            self.connection.execute(
+                "UPDATE story_fragments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, fragment_id),
+            )
+        else:
+            self.connection.execute(
+                "UPDATE story_fragments SET status = ?, fragment_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, fragment_order, fragment_id),
+            )
+        self.connection.commit()
+        return self.get_fragment(fragment_id)
+
     def list_fragments(self, story_id: str, status: str | None = None) -> list[FragmentRecord]:
         if status is None:
             rows = self.connection.execute(
