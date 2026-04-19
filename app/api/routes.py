@@ -75,6 +75,18 @@ def ingest_story(payload: IngestStoryRequest, request: Request) -> IngestStoryRe
         initial_analysis_status=result.status,
         pending_update_id=result.staged_update_id,
         orchestrator_mode=result.orchestrator_mode,
+        step_count=result.step_count,
+        stop_reason=result.stop_reason,
+        extracted_counts={
+            'characters': len(result.extraction.characters),
+            'objects': len(result.extraction.objects),
+            'events': len(result.extraction.events),
+            'facts': len(result.extraction.facts),
+            'relations': len(result.extraction.relations),
+        },
+        staged_item_counts=result.staged_item_counts,
+        unresolved_references=result.extraction.unresolved_references,
+        debug=result.debug_payload,
     )
 
 

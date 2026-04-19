@@ -42,6 +42,12 @@ class IngestStoryResponseV2(BaseModel):
     initial_analysis_status: str
     pending_update_id: str | None = None
     orchestrator_mode: Literal['heuristic', 'llm']
+    step_count: int = 0
+    stop_reason: str = ''
+    extracted_counts: dict[str, int] = Field(default_factory=dict)
+    staged_item_counts: dict[str, int] = Field(default_factory=dict)
+    unresolved_references: list[str] = Field(default_factory=list)
+    debug: dict[str, object] = Field(default_factory=dict)
 
 
 class AnalyzeSceneResponseV2(BaseModel):

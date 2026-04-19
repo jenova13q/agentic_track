@@ -169,12 +169,17 @@ async function ingestStory() {
   });
   state.currentStoryId = payload.story_id;
   renderMessage("История создана", {
-    explanation: `История ${payload.title} создана. Исходный текст отправлен на анализ и staged в pending update.`,
+    explanation: `История ${payload.title} создана. Исходный текст отправлен на анализ и подготовлен к подтверждению.`,
     status: payload.initial_analysis_status,
     issue_type: "none",
-    stop_reason: "ingested",
+    stop_reason: payload.stop_reason || "ingested",
     orchestrator_mode: payload.orchestrator_mode,
+    step_count: payload.step_count,
     pending_update_id: payload.pending_update_id,
+    extracted_counts: payload.extracted_counts,
+    staged_item_counts: payload.staged_item_counts,
+    unresolved_references: payload.unresolved_references,
+    debug: payload.debug,
   });
   await refreshStories();
   await selectStory(payload.story_id);

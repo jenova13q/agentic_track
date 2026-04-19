@@ -22,7 +22,15 @@ class StoryConsistencyOrchestratorV2:
             self.data_service.list_chunks(story_id)
             or self.data_service.list_entities(story_id, status='confirmed')
         )
+        has_extracted_candidates = False
         extraction = self.extract_tool.run(scene_text)
+        has_extracted_candidates = bool(
+            extraction.characters
+            or extraction.objects
+            or extraction.events
+            or extraction.facts
+            or extraction.relations
+        )
         context = self.context_tool.run(story_id=story_id, scene_text='')
         step_count = 1
 
@@ -58,7 +66,8 @@ class StoryConsistencyOrchestratorV2:
         debug_messages.extend(context.debug_messages)
         staged_debug_messages: list[str] = []
 
-        if verdict.should_stage_update and verdict.status != 'conflict':
+        should_stage_candidates = verdict.status != 'conflict' and (verdict.should_stage_update or has_extracted_candidates)
+        if should_stage_candidates:
             staged_fragment = self.stage_fragment_tool.run(story_id=story_id, scene_text=scene_text, source_label='analysis_submission')
             staged_memory = self.stage_memory_tool.run(
                 story_id=story_id,

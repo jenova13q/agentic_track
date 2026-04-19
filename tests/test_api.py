@@ -53,6 +53,8 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual('ingested', payload['status'])
         self.assertEqual('no_conflict', payload['initial_analysis_status'])
         self.assertIsNotNone(payload['pending_update_id'])
+        self.assertIn('debug', payload)
+        self.assertIn('extracted_counts', payload)
 
         story = self.client.get(f"/stories/{payload['story_id']}").json()
         self.assertEqual(1, story['pending_fragment_count'])
@@ -72,6 +74,21 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual('ingested', payload['status'])
         self.assertIsNotNone(payload['pending_update_id'])
         self.assertIn(payload['initial_analysis_status'], {'no_conflict', 'uncertain'})
+        self.assertGreaterEqual(payload['extracted_counts']['characters'], 1)
+
+    def test_analyze_scene_stages_uncertain_non_conflicting_piece_with_new_entities(self) -> None:
+        story_id = self._create_empty_story()
+
+        response = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку.'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual('uncertain', payload['status'])
+        self.assertIsNotNone(payload['staged_update_id'])
+        self.assertGreaterEqual(payload['extracted_counts']['characters'], 2)
 
     def test_analyze_scene_can_stage_pending_update(self) -> None:
         story_id = self._create_empty_story()
