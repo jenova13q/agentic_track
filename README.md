@@ -65,6 +65,7 @@ flowchart TD
 - [system-design.md](/c:/Users/recroot/Documents/katya/ITMO_hub/4%20semestr/agentic_track/docs/system-design.md)
 - [product-proposal.md](/c:/Users/recroot/Documents/katya/ITMO_hub/4%20semestr/agentic_track/docs/product-proposal.md)
 - [governance.md](/c:/Users/recroot/Documents/katya/ITMO_hub/4%20semestr/agentic_track/docs/governance.md)
+- [evaluation-summary.md](/c:/Users/recroot/Documents/katya/ITMO_hub/4%20semestr/agentic_track/docs/evaluation-summary.md)
 - `docs/specs/`
 - `docs/diagrams/`
 
@@ -150,6 +151,16 @@ python -m unittest -v tests.test_storage tests.test_tools_v2 tests.test_agent_v2
 ```bash
 docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.12 sh -lc "python -m pip install -e . && python -m unittest -v tests.test_storage tests.test_tools_v2 tests.test_agent_v2 tests.test_api"
 ```
+
+Краткая выжимка по evaluation:
+- покрыты extraction, retrieval, verdict, pending-confirm-reject и API flow;
+- regression suite проверяет ключевые типы конфликтов: `character`, `fact`, `timeline`, `object`, а также `uncertain`;
+- актуальный полный прогон: `31 / 31 tests passed`;
+- отдельный акцент сделан на отсутствие скрытых записей в подтверждённую память и на отсутствие утечки `pending` / `rejected` сцен в последующий анализ.
+
+Кратко про ограничения:
+- основная зона риска сейчас не в архитектуре, а в качестве малой модели на сложных русскоязычных сценах;
+- наиболее чувствительные случаи: смешение `fact` и `event`, смешение фактов и описаний персонажа, а также нелинейные временные переходы и связанные состояния объектов.
 
 ## Scope
 
