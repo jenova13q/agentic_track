@@ -192,6 +192,19 @@ class StoryMemoryDataService:
         finally:
             connection.close()
 
+    def compose_story_text(self, story_id: str, include_pending: bool = True) -> str:
+        connection, story_repo, _ = self._repos()
+        try:
+            fragments = story_repo.list_fragments(story_id=story_id)
+        finally:
+            connection.close()
+        allowed_statuses = {'confirmed'}
+        if include_pending:
+            allowed_statuses.add('pending')
+        visible_fragments = [fragment for fragment in fragments if fragment.status in allowed_statuses]
+        visible_fragments.sort(key=lambda fragment: (fragment.fragment_order is None, fragment.fragment_order or 0, fragment.created_at, fragment.id))
+        return '\n\n'.join(fragment.text.strip() for fragment in visible_fragments if fragment.text.strip())
+
     def list_chunks(self, story_id: str):
         connection, story_repo, _ = self._repos()
         try:

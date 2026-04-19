@@ -8,6 +8,8 @@ const el = {
   storyText: document.getElementById("story-text"),
   sceneText: document.getElementById("scene-text"),
   sceneQuestion: document.getElementById("scene-question"),
+  ingestStory: document.getElementById("ingest-story"),
+  analyzeScene: document.getElementById("analyze-scene"),
   stories: document.getElementById("stories"),
   currentStory: document.getElementById("current-story"),
   sessionHint: document.getElementById("session-hint"),
@@ -16,6 +18,13 @@ const el = {
   observabilitySummary: document.getElementById("observability-summary"),
   recentTraces: document.getElementById("recent-traces"),
 };
+
+function setButtonLoading(button, isLoading, loadingLabel, defaultLabel) {
+  if (!button) return;
+  button.disabled = isLoading;
+  button.classList.toggle("loading", isLoading);
+  button.textContent = isLoading ? loadingLabel : defaultLabel;
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -69,6 +78,7 @@ function renderMessage(title, payload) {
   article.innerHTML = `
     <div class="meta">${title}</div>
     <div><strong class="status ${payload.status || "none"}">${payload.status || "info"}</strong> · ${payload.issue_type || "n/a"} · stop: ${payload.stop_reason || "n/a"}</div>
+    ${payload.text ? `<pre class="story-snippet">${payload.text}</pre>` : ""}
     <p>${payload.explanation || ""}</p>
     <div class="muted">mode: ${payload.orchestrator_mode || "n/a"} · steps: ${payload.step_count || 0}</div>
     <div class="muted">${extracted}</div>
@@ -152,6 +162,7 @@ async function selectStory(storyId) {
   const story = await api(`/stories/${storyId}`);
   el.currentStory.textContent = `${story.title} · ${story.story_id.slice(0, 8)}`;
   el.sessionHint.textContent = `confirmed fragments: ${story.confirmed_fragment_count}, pending fragments: ${story.pending_fragment_count}, chunks: ${story.total_chunk_count}, memory: ${JSON.stringify(story.memory_counts)}`;
+  el.storyText.value = story.draft_text || "";
   renderPendingUpdates(story);
   await refreshStories();
   await refreshObservability();
@@ -163,26 +174,32 @@ async function refreshStoryDetails() {
 }
 
 async function ingestStory() {
-  const payload = await api("/stories/ingest", {
-    method: "POST",
-    body: JSON.stringify({ title: el.storyTitle.value, text: el.storyText.value }),
-  });
-  state.currentStoryId = payload.story_id;
-  renderMessage("История создана", {
-    explanation: `История ${payload.title} создана. Исходный текст отправлен на анализ и подготовлен к подтверждению.`,
-    status: payload.initial_analysis_status,
-    issue_type: "none",
-    stop_reason: payload.stop_reason || "ingested",
-    orchestrator_mode: payload.orchestrator_mode,
-    step_count: payload.step_count,
-    pending_update_id: payload.pending_update_id,
-    extracted_counts: payload.extracted_counts,
-    staged_item_counts: payload.staged_item_counts,
-    unresolved_references: payload.unresolved_references,
-    debug: payload.debug,
-  });
-  await refreshStories();
-  await selectStory(payload.story_id);
+  setButtonLoading(el.ingestStory, true, "Проверяем текст...", "Создать историю и проверить текст");
+  try {
+    const payload = await api("/stories/ingest", {
+      method: "POST",
+      body: JSON.stringify({ title: el.storyTitle.value, text: el.storyText.value }),
+    });
+    state.currentStoryId = payload.story_id;
+    renderMessage("История создана", {
+      text: el.storyText.value,
+      explanation: `История ${payload.title} создана. Исходный текст отправлен на анализ и подготовлен к подтверждению.`,
+      status: payload.initial_analysis_status,
+      issue_type: "none",
+      stop_reason: payload.stop_reason || "ingested",
+      orchestrator_mode: payload.orchestrator_mode,
+      step_count: payload.step_count,
+      pending_update_id: payload.pending_update_id,
+      extracted_counts: payload.extracted_counts,
+      staged_item_counts: payload.staged_item_counts,
+      unresolved_references: payload.unresolved_references,
+      debug: payload.debug,
+    });
+    await refreshStories();
+    await selectStory(payload.story_id);
+  } finally {
+    setButtonLoading(el.ingestStory, false, "Проверяем текст...", "Создать историю и проверить текст");
+  }
 }
 
 async function analyzeScene() {
@@ -190,20 +207,25 @@ async function analyzeScene() {
     alert("Сначала создайте или выберите историю.");
     return;
   }
-  const payload = await api(`/stories/${state.currentStoryId}/analyze`, {
-    method: "POST",
-    body: JSON.stringify({
-      scene_text: el.sceneText.value,
-      question: el.sceneQuestion.value.trim() || null,
-    }),
-  });
-  renderMessage("Ответ агента", payload);
-  await refreshStoryDetails();
+  setButtonLoading(el.analyzeScene, true, "Проверяем...", "Проверить сцену");
+  try {
+    const payload = await api(`/stories/${state.currentStoryId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify({
+        scene_text: el.sceneText.value,
+        question: el.sceneQuestion.value.trim() || null,
+      }),
+    });
+    renderMessage("Ответ агента", payload);
+    await refreshStoryDetails();
+  } finally {
+    setButtonLoading(el.analyzeScene, false, "Проверяем...", "Проверить сцену");
+  }
 }
 
 document.getElementById("refresh-stories").addEventListener("click", refreshStories);
-document.getElementById("ingest-story").addEventListener("click", ingestStory);
-document.getElementById("analyze-scene").addEventListener("click", analyzeScene);
+el.ingestStory.addEventListener("click", ingestStory);
+el.analyzeScene.addEventListener("click", analyzeScene);
 
 refreshStories();
 refreshObservability();

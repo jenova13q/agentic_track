@@ -62,6 +62,7 @@ class StoryApiTests(unittest.TestCase):
         story = self.client.get(f"/stories/{payload['story_id']}").json()
         self.assertEqual(1, story['pending_fragment_count'])
         self.assertEqual(1, len(story['pending_updates']))
+        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story['draft_text'])
 
     def test_ingest_bootstraps_initial_story_even_with_pronouns(self) -> None:
         response = self.client.post(
@@ -104,6 +105,7 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual('no_conflict', payload['status'])
+        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', payload['text'])
         self.assertIsNotNone(payload['staged_update_id'])
         self.assertGreaterEqual(payload['staged_item_counts']['entities'], 2)
         self.assertIn('debug', payload)
@@ -197,6 +199,7 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(1, story['confirmed_fragment_count'])
         self.assertEqual(0, story['pending_fragment_count'])
         self.assertEqual(0, len([item for item in story['pending_updates'] if item['status'] == 'pending']))
+        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story['draft_text'])
 
     def test_reject_pending_update_marks_it_rejected(self) -> None:
         ingest = self.client.post(

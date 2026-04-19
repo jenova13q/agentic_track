@@ -28,6 +28,7 @@ class StoryListResponseV2(BaseModel):
 class StoryResponseV2(BaseModel):
     story_id: str
     title: str
+    draft_text: str = ''
     confirmed_fragment_count: int
     pending_fragment_count: int
     total_chunk_count: int
@@ -51,6 +52,7 @@ class IngestStoryResponseV2(BaseModel):
 
 
 class AnalyzeSceneResponseV2(BaseModel):
+    text: str = ''
     status: Literal['conflict', 'no_conflict', 'uncertain']
     issue_type: Literal['character', 'fact', 'timeline', 'object', 'mixed', 'none']
     explanation: str
