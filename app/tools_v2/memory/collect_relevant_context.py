@@ -18,6 +18,7 @@ class CollectRelevantContextTool:
         matched_entity_bundles = []
         seen_entity_ids: set[str] = set()
         chunk_windows = []
+        debug_messages: list[str] = []
 
         for name in names:
             entity = self.data_service.find_entity_by_name(story_id=story_id, canonical_name=canonicalize(name))
@@ -26,6 +27,7 @@ class CollectRelevantContextTool:
             seen_entity_ids.add(entity.id)
             bundle = self.data_service.get_entity_bundle(entity.id)
             if bundle is not None:
+                debug_messages.append(f'Найдено совпадение в памяти: {bundle.entity.entity_kind} "{bundle.entity.name}"')
                 matched_entity_bundles.append(bundle)
                 for evidence in bundle.evidence_links[:1]:
                     window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1)
@@ -43,6 +45,7 @@ class CollectRelevantContextTool:
             seen_entity_ids.add(entity.id)
             bundle = self.data_service.get_entity_bundle(entity.id)
             if bundle is not None:
+                debug_messages.append(f'Найдено совпадение в памяти: {bundle.entity.entity_kind} "{bundle.entity.name}"')
                 matched_entity_bundles.append(bundle)
                 for evidence in bundle.evidence_links[:1]:
                     window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1)
@@ -55,10 +58,12 @@ class CollectRelevantContextTool:
                 last_chunk = chunks[-1]
                 fallback_window = self.data_service.get_chunk_window(last_chunk.id, before=2, after=0)
                 if fallback_window is not None:
+                    debug_messages.append('Найдены местоименные ссылки, подтянут последний кусок текста для контекста.')
                     chunk_windows.append(fallback_window)
 
         return ContextCollectionResult(
             matched_entity_bundles=matched_entity_bundles,
             chunk_windows=chunk_windows,
             unresolved_references=pronouns,
+            debug_messages=debug_messages,
         )

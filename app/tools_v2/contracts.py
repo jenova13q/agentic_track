@@ -58,6 +58,7 @@ class ContextCollectionResult:
     matched_entity_bundles: list[EntityBundle] = field(default_factory=list)
     chunk_windows: list[ChunkWindow] = field(default_factory=list)
     unresolved_references: list[str] = field(default_factory=list)
+    debug_messages: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -73,3 +74,4 @@ class StagedMemoryResult:
     created_event_ids: list[str] = field(default_factory=list)
     created_fact_ids: list[str] = field(default_factory=list)
     created_relation_ids: list[str] = field(default_factory=list)
+    debug_messages: list[str] = field(default_factory=list)

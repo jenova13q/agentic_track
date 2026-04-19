@@ -48,10 +48,18 @@ function renderStories() {
 }
 
 function renderMessage(title, payload) {
+  console.groupCollapsed(`[StoryConsistencyAgent] ${title}`);
+  console.log("payload", payload);
+  if (payload.debug) {
+    console.log("debug", payload.debug);
+  }
+  console.groupEnd();
   const article = document.createElement("article");
   article.className = "message";
   const extractedCounts = payload.extracted_counts || {};
   const stagedCounts = payload.staged_item_counts || {};
+  const debugMessages = payload.debug?.messages || [];
+  const debugJson = payload.debug ? JSON.stringify(payload.debug, null, 2) : "";
   const extracted = payload.extracted_counts
     ? `Найдено: персонажей ${extractedCounts.characters || 0}, предметов ${extractedCounts.objects || 0}, событий ${extractedCounts.events || 0}, фактов ${extractedCounts.facts || 0}, связей ${extractedCounts.relations || 0}`
     : "";
@@ -67,6 +75,31 @@ function renderMessage(title, payload) {
     <div class="muted">${staged}</div>
     <div class="muted">pending update: ${payload.staged_update_id || payload.pending_update_id || "n/a"}</div>
   `;
+  if (debugMessages.length) {
+    const logTitle = document.createElement("div");
+    logTitle.className = "meta";
+    logTitle.textContent = "Лог извлечения и памяти";
+    article.appendChild(logTitle);
+
+    const list = document.createElement("ul");
+    list.className = "debug-log";
+    debugMessages.forEach((message) => {
+      const li = document.createElement("li");
+      li.textContent = message;
+      list.appendChild(li);
+    });
+    article.appendChild(list);
+  }
+
+  if (payload.debug) {
+    const details = document.createElement("details");
+    details.className = "debug-details";
+    details.innerHTML = `
+      <summary>Показать извлечённые объекты и контекст</summary>
+      <pre class="code-block">${debugJson}</pre>
+    `;
+    article.appendChild(details);
+  }
   el.messages.prepend(article);
 }
 

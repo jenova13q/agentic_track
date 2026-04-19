@@ -115,6 +115,32 @@ class AgentV2Tests(unittest.TestCase):
         self.assertEqual('internal_character_conflict', result.stop_reason)
         self.assertIsNone(result.staged_update_id)
 
+    def test_internal_character_conflict_precheck_runs_even_when_llm_key_is_present(self) -> None:
+        story = self.data_service.create_story(title='Колокол без моря')
+        self.adapter.api_key = 'fake-key'
+
+        result = self.orchestrator.analyze_scene(
+            story_id=story.id,
+            scene_text='Лев был смелый. Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту.',
+        )
+
+        self.assertEqual('conflict', result.status)
+        self.assertEqual('character', result.issue_type)
+        self.assertEqual('internal_character_conflict', result.stop_reason)
+
+    def test_orchestrator_returns_debug_payload(self) -> None:
+        story = self.data_service.create_story(title='Колокол без моря')
+
+        result = self.orchestrator.analyze_scene(
+            story_id=story.id,
+            scene_text='Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.',
+        )
+
+        self.assertIn('messages', result.debug_payload)
+        self.assertIn('extraction', result.debug_payload)
+        self.assertIn('staging', result.debug_payload)
+        self.assertGreaterEqual(len(result.debug_payload['messages']), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

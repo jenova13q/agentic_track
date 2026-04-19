@@ -134,7 +134,7 @@ def analyze_scene(story_id: str, payload: AnalyzeSceneRequest, request: Request)
             event_type='analysis',
             status=result.status,
             issue_type=result.issue_type,
-            stop_reason='analysis_complete',
+            stop_reason=result.stop_reason,
             orchestrator_mode=result.orchestrator_mode,
             model_name=orchestrator_v2.llm_adapter.model,
             latency_ms=round((perf_counter() - started_at) * 1000, 2),
@@ -151,7 +151,7 @@ def analyze_scene(story_id: str, payload: AnalyzeSceneRequest, request: Request)
         issue_type=result.issue_type,
         explanation=result.explanation,
         confidence=result.confidence,
-        stop_reason='analysis_complete',
+        stop_reason=result.stop_reason,
         orchestrator_mode=result.orchestrator_mode,
         step_count=result.step_count,
         staged_update_id=result.staged_update_id,
@@ -165,6 +165,7 @@ def analyze_scene(story_id: str, payload: AnalyzeSceneRequest, request: Request)
             'relations': len(result.extraction.relations),
         },
         unresolved_references=result.extraction.unresolved_references,
+        debug=result.debug_payload,
     )
 
 

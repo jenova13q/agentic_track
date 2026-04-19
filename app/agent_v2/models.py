@@ -40,3 +40,4 @@ class AgentV2Result:
     staged_item_counts: dict[str, int] = field(default_factory=dict)
     orchestrator_mode: Literal['heuristic', 'llm'] = 'heuristic'
     step_count: int = 0
+    debug_payload: dict[str, object] = field(default_factory=dict)

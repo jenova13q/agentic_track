@@ -78,6 +78,10 @@ class LLMAdapterV2:
             return self._fallback_next_action(extraction=extraction, context=context)
 
     def assess_scene(self, *, scene_text: str, extraction: ExtractionResult, context: ContextCollectionResult) -> ConsistencyVerdict:
+        precheck = self._precheck_verdict(extraction=extraction, context=context)
+        if precheck is not None:
+            return precheck
+
         if not self.enabled:
             return self._fallback_verdict(extraction=extraction, context=context)
 
@@ -142,12 +146,7 @@ class LLMAdapterV2:
             logger.warning('agent_v2 verdict failed, falling back to heuristic: %s', exc)
             return self._fallback_verdict(extraction=extraction, context=context)
 
-    def _fallback_next_action(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> OrchestratorDecision:
-        if (extraction.characters or extraction.objects or extraction.unresolved_references) and not context.matched_entity_bundles and not context.chunk_windows:
-            return OrchestratorDecision(action='collect_relevant_context', rationale='need_memory_context')
-        return OrchestratorDecision(action='finish', rationale='enough_local_structure')
-
-    def _fallback_verdict(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> ConsistencyVerdict:
+    def _precheck_verdict(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> ConsistencyVerdict | None:
         trait_facts_by_subject: dict[str, list[str]] = {}
         for fact in extraction.facts:
             if fact.fact_kind != 'character_trait' or not fact.subject_name:
@@ -175,7 +174,14 @@ class LLMAdapterV2:
                 should_stage_update=False,
                 stop_reason='unresolved_references',
             )
+        return None
 
+    def _fallback_next_action(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> OrchestratorDecision:
+        if (extraction.characters or extraction.objects or extraction.unresolved_references) and not context.matched_entity_bundles and not context.chunk_windows:
+            return OrchestratorDecision(action='collect_relevant_context', rationale='need_memory_context')
+        return OrchestratorDecision(action='finish', rationale='enough_local_structure')
+
+    def _fallback_verdict(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> ConsistencyVerdict:
         for bundle in context.matched_entity_bundles:
             if bundle.character_profile is None:
                 continue

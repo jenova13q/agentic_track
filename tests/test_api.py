@@ -71,6 +71,10 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual('no_conflict', payload['status'])
         self.assertIsNotNone(payload['staged_update_id'])
         self.assertGreaterEqual(payload['staged_item_counts']['entities'], 2)
+        self.assertIn('debug', payload)
+        self.assertIn('messages', payload['debug'])
+        self.assertIn('extraction', payload['debug'])
+        self.assertGreaterEqual(len(payload['debug']['messages']), 1)
 
     def test_analyze_scene_detects_object_conflict(self) -> None:
         story_id = self._create_story_with_confirmed_loss()
@@ -99,6 +103,8 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual('conflict', payload['status'])
         self.assertEqual('character', payload['issue_type'])
         self.assertIsNone(payload['staged_update_id'])
+        self.assertEqual('internal_character_conflict', payload['stop_reason'])
+        self.assertIn('debug', payload)
 
     def test_confirm_pending_update_promotes_fragment_and_memory(self) -> None:
         ingest = self.client.post(

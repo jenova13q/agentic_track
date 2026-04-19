@@ -18,6 +18,7 @@ class StageMemoryCandidatesTool:
             summary=extraction.scene_summary or 'Pending scene extraction update.',
         )
         chunk_ids = chunk_ids or []
+        debug_messages: list[str] = []
 
         created_entity_ids: list[str] = []
         created_event_ids: list[str] = []
@@ -33,6 +34,7 @@ class StageMemoryCandidatesTool:
             )
             if existing is not None:
                 entity_ids_by_name[candidate.name] = existing.id
+                debug_messages.append(f'Найден уже имеющийся {candidate.kind}: "{candidate.name}"')
                 continue
             created = self.data_service.create_entity(
                 story_id=story_id,
@@ -45,6 +47,7 @@ class StageMemoryCandidatesTool:
             )
             entity_ids_by_name[candidate.name] = created.id
             created_entity_ids.append(created.id)
+            debug_messages.append(f'Найден новый {candidate.kind}: "{candidate.name}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='entity',
@@ -74,6 +77,7 @@ class StageMemoryCandidatesTool:
             )
             event_ids_by_title[event.title] = created_event.id
             created_event_ids.append(created_event.id)
+            debug_messages.append(f'Найдено новое событие: "{event.title}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='event',
@@ -100,6 +104,7 @@ class StageMemoryCandidatesTool:
                 confidence=0.56,
             )
             created_fact_ids.append(created_fact.id)
+            debug_messages.append(f'Найден новый факт: "{fact.summary}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='fact',
@@ -125,6 +130,7 @@ class StageMemoryCandidatesTool:
                 confidence=0.55,
             )
             created_relation_ids.append(created_relation.id)
+            debug_messages.append(f'Найдена новая связь: "{relation.summary}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='relation',
@@ -141,4 +147,5 @@ class StageMemoryCandidatesTool:
             created_event_ids=created_event_ids,
             created_fact_ids=created_fact_ids,
             created_relation_ids=created_relation_ids,
+            debug_messages=debug_messages,
         )

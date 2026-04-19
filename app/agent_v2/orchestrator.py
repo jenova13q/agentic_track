@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+from dataclasses import asdict
+
 from app.agent_v2.llm_adapter import LLMAdapterV2
 from app.agent_v2.models import AgentV2Result
 from app.storage.service import StoryMemoryDataService
@@ -37,6 +39,11 @@ class StoryConsistencyOrchestratorV2:
         staged_update_id = None
         staged_fragment_id = None
         staged_item_counts: dict[str, int] = {}
+        debug_messages = [
+            f'Извлечён новый фрагмент: персонажей {len(extraction.characters)}, объектов {len(extraction.objects)}, событий {len(extraction.events)}, фактов {len(extraction.facts)}, связей {len(extraction.relations)}',
+        ]
+        debug_messages.extend(context.debug_messages)
+        staged_debug_messages: list[str] = []
 
         if verdict.should_stage_update and verdict.status != 'conflict':
             staged_fragment = self.stage_fragment_tool.run(story_id=story_id, scene_text=scene_text, source_label='analysis_submission')
@@ -54,6 +61,59 @@ class StoryConsistencyOrchestratorV2:
                 'facts': len(staged_memory.created_fact_ids),
                 'relations': len(staged_memory.created_relation_ids),
             }
+            staged_debug_messages = staged_memory.debug_messages
+            debug_messages.extend(staged_debug_messages)
+
+        debug_payload = {
+            'messages': debug_messages,
+            'extraction': {
+                'scene_summary': extraction.scene_summary,
+                'characters': [asdict(candidate) for candidate in extraction.characters],
+                'objects': [asdict(candidate) for candidate in extraction.objects],
+                'events': [asdict(event) for event in extraction.events],
+                'facts': [asdict(fact) for fact in extraction.facts],
+                'relations': [asdict(relation) for relation in extraction.relations],
+                'temporal_hints': extraction.temporal_hints,
+                'unresolved_references': extraction.unresolved_references,
+            },
+            'context': {
+                'matched_entities': [
+                    {
+                        'kind': bundle.entity.entity_kind,
+                        'name': bundle.entity.name,
+                        'summary': bundle.entity.summary,
+                        'character_profile': bundle.character_profile.trait_summary if bundle.character_profile else None,
+                        'object_profile': bundle.object_profile.current_state_summary if bundle.object_profile else None,
+                        'fact_summaries': [fact.summary for fact in bundle.facts],
+                        'relation_summaries': [relation.summary for relation in bundle.relations],
+                    }
+                    for bundle in context.matched_entity_bundles
+                ],
+                'chunk_windows': [
+                    {
+                        'center': window.center.text,
+                        'previous': [chunk.text for chunk in window.previous_chunks],
+                        'next': [chunk.text for chunk in window.next_chunks],
+                    }
+                    for window in context.chunk_windows
+                ],
+                'unresolved_references': context.unresolved_references,
+                'messages': context.debug_messages,
+            },
+            'staging': {
+                'pending_update_id': staged_update_id,
+                'fragment_id': staged_fragment_id,
+                'item_counts': staged_item_counts,
+                'messages': staged_debug_messages,
+            },
+            'verdict': {
+                'status': verdict.status,
+                'issue_type': verdict.issue_type,
+                'confidence': verdict.confidence,
+                'stop_reason': verdict.stop_reason,
+                'should_stage_update': verdict.should_stage_update,
+            },
+        }
 
         return AgentV2Result(
             status=verdict.status,
@@ -68,4 +128,5 @@ class StoryConsistencyOrchestratorV2:
             staged_item_counts=staged_item_counts,
             orchestrator_mode='llm' if self.llm_adapter.enabled else 'heuristic',
             step_count=step_count,
+            debug_payload=debug_payload,
         )
