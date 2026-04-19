@@ -64,6 +64,36 @@ class ToolsV2Tests(unittest.TestCase):
         self.assertEqual(1, len(result.chunk_windows))
         self.assertEqual('chunk:1', result.chunk_windows[0].center.source_ref)
 
+    def test_collect_relevant_context_always_includes_recent_range_and_matches_inflected_name(self) -> None:
+        story = self.data_service.create_story(title='Колокол без моря')
+        fragment = self.data_service.add_fragment(
+            story_id=story.id,
+            text='К вечеру Лев ждал Павла у пристани. Перед рассветом они отвязали лодку.',
+            fragment_kind='scene',
+            status='confirmed',
+            source_label='scene:2',
+            fragment_order=0,
+        )
+        first = self.data_service.add_chunk(story_id=story.id, fragment_id=fragment.id, chunk_index=0, source_ref='chunk:0', text='К вечеру Лев ждал Павла у пристани.', token_count=6)
+        self.data_service.add_chunk(story_id=story.id, fragment_id=fragment.id, chunk_index=1, source_ref='chunk:1', text='Перед рассветом они отвязали лодку.', token_count=5)
+        lev = self.data_service.create_entity(
+            story_id=story.id,
+            entity_kind='character',
+            name='Лев',
+            canonical_name='лев',
+            summary='Главный герой.',
+            status='confirmed',
+            confidence=0.9,
+        )
+        self.data_service.add_evidence_link(story_id=story.id, target_table='entity', target_id=lev.id, chunk_id=first.id)
+
+        result = self.context_tool.run(story_id=story.id, scene_text='Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку.')
+
+        self.assertGreaterEqual(len(result.chunk_windows), 1)
+        self.assertTrue(any(bundle.entity.name == 'Лев' for bundle in result.matched_entity_bundles))
+        self.assertTrue(any('локальный диапазон последних кусков' in message.lower() for message in result.debug_messages))
+        self.assertTrue(any('"Льва" -> "Лев"' in message for message in result.debug_messages))
+
     def test_stage_fragment_and_memory_candidates_create_pending_records(self) -> None:
         story = self.data_service.create_story(title='Колокол без моря')
         scene_text = 'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.'

@@ -2,7 +2,7 @@
 
 from app.storage.service import StoryMemoryDataService
 from app.tools_v2.contracts import ExtractionResult, StagedMemoryResult
-from app.tools_v2.helpers import canonicalize
+from app.tools_v2.helpers import canonicalize, entity_lookup_key
 
 
 class StageMemoryCandidatesTool:
@@ -10,6 +10,21 @@ class StageMemoryCandidatesTool:
 
     def __init__(self, data_service: StoryMemoryDataService | None = None) -> None:
         self.data_service = data_service or StoryMemoryDataService()
+
+    def _find_existing_entity(self, story_id: str, candidate_name: str, candidate_canonical_name: str, entity_kind: str):
+        existing = self.data_service.find_entity_by_name(
+            story_id=story_id,
+            canonical_name=candidate_canonical_name,
+            entity_kind=entity_kind,
+        )
+        if existing is not None:
+            return existing
+
+        lookup_key = entity_lookup_key(candidate_name)
+        for entity in self.data_service.list_entities(story_id=story_id, entity_kind=entity_kind, status='confirmed'):
+            if entity_lookup_key(entity.name) == lookup_key or entity_lookup_key(entity.canonical_name) == lookup_key:
+                return entity
+        return None
 
     def run(self, story_id: str, extraction: ExtractionResult, fragment_id: str | None = None, chunk_ids: list[str] | None = None) -> StagedMemoryResult:
         pending_update = self.data_service.create_pending_update(
@@ -27,9 +42,10 @@ class StageMemoryCandidatesTool:
         entity_ids_by_name: dict[str, str] = {}
 
         for candidate in extraction.characters + extraction.objects:
-            existing = self.data_service.find_entity_by_name(
+            existing = self._find_existing_entity(
                 story_id=story_id,
-                canonical_name=candidate.canonical_name,
+                candidate_name=candidate.name,
+                candidate_canonical_name=candidate.canonical_name,
                 entity_kind=candidate.kind,
             )
             if existing is not None:
