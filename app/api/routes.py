@@ -48,7 +48,7 @@ def list_stories() -> StoryListResponseV2:
 def ingest_story(payload: IngestStoryRequest, request: Request) -> IngestStoryResponseV2:
     story = data_service.create_story(title=payload.title)
     started_at = perf_counter()
-    result = orchestrator_v2.analyze_scene(story.id, payload.text)
+    result = orchestrator_v2.analyze_scene(story.id, payload.text, bootstrap_mode=True)
     observability.record_trace(
         AgentTrace(
             request_id=request.state.request_id,

@@ -17,7 +17,11 @@ class StoryConsistencyOrchestratorV2:
         self.stage_fragment_tool = StageFragmentTool(self.data_service)
         self.stage_memory_tool = StageMemoryCandidatesTool(self.data_service)
 
-    def analyze_scene(self, story_id: str, scene_text: str, user_comment: str | None = None) -> AgentV2Result:
+    def analyze_scene(self, story_id: str, scene_text: str, user_comment: str | None = None, bootstrap_mode: bool = False) -> AgentV2Result:
+        has_existing_context = bool(
+            self.data_service.list_chunks(story_id)
+            or self.data_service.list_entities(story_id, status='confirmed')
+        )
         extraction = self.extract_tool.run(scene_text)
         context = self.context_tool.run(story_id=story_id, scene_text='')
         step_count = 1
@@ -36,6 +40,15 @@ class StoryConsistencyOrchestratorV2:
             break
 
         verdict = self.llm_adapter.assess_scene(scene_text=scene_text, extraction=extraction, context=context)
+        bootstrap_stage_allowed = bootstrap_mode and not has_existing_context and verdict.status != 'conflict'
+        if bootstrap_stage_allowed and not verdict.should_stage_update:
+            verdict.should_stage_update = True
+            verdict.stop_reason = 'bootstrap_stage'
+            verdict.explanation = 'Базовый текст принят как исходная память истории. Локальных противоречий не найдено, фрагмент подготовлен к сохранению.'
+            if verdict.status == 'uncertain':
+                verdict.status = 'no_conflict'
+                verdict.issue_type = 'none'
+                verdict.confidence = max(verdict.confidence, 0.56)
         staged_update_id = None
         staged_fragment_id = None
         staged_item_counts: dict[str, int] = {}

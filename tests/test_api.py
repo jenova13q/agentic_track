@@ -58,6 +58,21 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(1, story['pending_fragment_count'])
         self.assertEqual(1, len(story['pending_updates']))
 
+    def test_ingest_bootstraps_initial_story_even_with_pronouns(self) -> None:
+        response = self.client.post(
+            '/stories/ingest',
+            json={
+                'title': 'Черновик истории',
+                'text': 'Лев долго стоял у причала. Он слушал воду и не отвечал Павлу.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual('ingested', payload['status'])
+        self.assertIsNotNone(payload['pending_update_id'])
+        self.assertIn(payload['initial_analysis_status'], {'no_conflict', 'uncertain'})
+
     def test_analyze_scene_can_stage_pending_update(self) -> None:
         story_id = self._create_empty_story()
 
