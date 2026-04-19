@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.agent_v2 import LLMAdapterV2, StoryConsistencyOrchestratorV2
 from app.storage import Database, StoryMemoryDataService
@@ -143,6 +144,60 @@ class AgentV2Tests(unittest.TestCase):
         self.assertIn('extraction', result.debug_payload)
         self.assertIn('staging', result.debug_payload)
         self.assertGreaterEqual(len(result.debug_payload['messages']), 1)
+
+    def test_llm_verdict_payload_includes_locations(self) -> None:
+        story = self.data_service.create_story(title='Колокол без моря')
+        extraction = self.extract_tool.run(
+            'К вечеру Приморск всегда становился похож на плохо вытертое зеркало. Лев живёт в Приморске. Лев был смелый. На следующее утро Павел приехал с острова. Павел живёт в Маячном. Павел был добрый. Лев встречает Павла у рыбного склада.'
+        )
+        context = self.orchestrator.context_tool.run(
+            story_id=story.id,
+            extraction=extraction,
+            scene_text='',
+        )
+        self.adapter.api_key = 'fake-key'
+
+        captured_json = {}
+
+        class _FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    'choices': [
+                        {
+                            'message': {
+                                'content': '{"status":"no_conflict","issue_type":"none","explanation":"ok","confidence":0.7,"should_stage_update":true,"stop_reason":"llm_verdict"}'
+                            }
+                        }
+                    ]
+                }
+
+        class _FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def post(self, url, headers=None, json=None):
+                captured_json.update(json or {})
+                return _FakeResponse()
+
+        with patch('app.agent_v2.llm_adapter.httpx.Client', _FakeClient):
+            verdict = self.adapter.assess_scene(
+                scene_text='Лев встречает Павла у рыбного склада.',
+                extraction=extraction,
+                context=context,
+            )
+
+        self.assertEqual('no_conflict', verdict.status)
+        user_payload = captured_json['messages'][1]['content']
+        self.assertIn('"locations": ["Приморск", "Маячный", "рыбный склад"]', user_payload)
 
 
 if __name__ == '__main__':

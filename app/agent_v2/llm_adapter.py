@@ -44,6 +44,7 @@ class LLMAdapterV2:
                             'scene_text': scene_text,
                             'step_count': step_count,
                             'character_count': len(extraction.characters),
+                            'location_count': len(extraction.locations),
                             'object_count': len(extraction.objects),
                             'event_count': len(extraction.events),
                             'fact_count': len(extraction.facts),
@@ -109,6 +110,7 @@ class LLMAdapterV2:
                             'scene_text': scene_text,
                             'extraction': {
                                 'characters': [candidate.name for candidate in extraction.characters],
+                                'locations': [candidate.name for candidate in extraction.locations],
                                 'objects': [candidate.name for candidate in extraction.objects],
                                 'events': [event.summary for event in extraction.events],
                                 'facts': [fact.summary for fact in extraction.facts],
@@ -177,7 +179,7 @@ class LLMAdapterV2:
         return None
 
     def _fallback_next_action(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> OrchestratorDecision:
-        if (extraction.characters or extraction.objects or extraction.unresolved_references) and not context.matched_entity_bundles and not context.chunk_windows:
+        if (extraction.characters or extraction.locations or extraction.objects or extraction.unresolved_references) and not context.matched_entity_bundles and not context.chunk_windows:
             return OrchestratorDecision(action='collect_relevant_context', rationale='need_memory_context')
         return OrchestratorDecision(action='finish', rationale='enough_local_structure')
 
@@ -224,7 +226,14 @@ class LLMAdapterV2:
                         stop_reason='object_conflict',
                     )
 
-        should_stage_update = bool(extraction.characters or extraction.objects or extraction.events or extraction.facts or extraction.relations)
+        should_stage_update = bool(
+            extraction.characters
+            or extraction.locations
+            or extraction.objects
+            or extraction.events
+            or extraction.facts
+            or extraction.relations
+        )
         return ConsistencyVerdict(
             status='no_conflict',
             issue_type='none',
