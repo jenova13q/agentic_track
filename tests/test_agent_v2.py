@@ -6,6 +6,8 @@ from pathlib import Path
 
 from app.agent_v2 import LLMAdapterV2, StoryConsistencyOrchestratorV2
 from app.storage import Database, StoryMemoryDataService
+from app.tools_v2 import ExtractSceneElementsTool
+from tests.fake_extraction import FakeSceneExtractionBackend
 
 
 class AgentV2Tests(unittest.TestCase):
@@ -15,7 +17,8 @@ class AgentV2Tests(unittest.TestCase):
         self.data_service = StoryMemoryDataService(database=Database(self.db_path))
         self.adapter = LLMAdapterV2()
         self.adapter.api_key = None
-        self.orchestrator = StoryConsistencyOrchestratorV2(data_service=self.data_service, llm_adapter=self.adapter)
+        self.extract_tool = ExtractSceneElementsTool(backend=FakeSceneExtractionBackend())
+        self.orchestrator = StoryConsistencyOrchestratorV2(data_service=self.data_service, llm_adapter=self.adapter, extract_tool=self.extract_tool)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()

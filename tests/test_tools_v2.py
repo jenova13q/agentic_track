@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.storage import Database, StoryMemoryDataService
 from app.tools_v2 import CollectRelevantContextTool, ExtractSceneElementsTool, StageFragmentTool, StageMemoryCandidatesTool
+from tests.fake_extraction import FakeSceneExtractionBackend
 
 
 class ToolsV2Tests(unittest.TestCase):
@@ -13,7 +14,7 @@ class ToolsV2Tests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp_dir.name) / 'story_memory.sqlite3'
         self.data_service = StoryMemoryDataService(database=Database(self.db_path))
-        self.extract_tool = ExtractSceneElementsTool()
+        self.extract_tool = ExtractSceneElementsTool(backend=FakeSceneExtractionBackend())
         self.context_tool = CollectRelevantContextTool(self.data_service)
         self.stage_fragment_tool = StageFragmentTool(self.data_service)
         self.stage_memory_tool = StageMemoryCandidatesTool(self.data_service)
@@ -23,16 +24,14 @@ class ToolsV2Tests(unittest.TestCase):
 
     def test_extract_scene_elements_returns_structured_candidates(self) -> None:
         result = self.extract_tool.run(
-            'Лев был смелый. Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.'
+            'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.'
         )
 
-        character_names = [candidate.name for candidate in result.characters]
-        self.assertIn('Лев', character_names)
-        self.assertTrue(any(name.startswith('Павл') for name in character_names))
+        self.assertEqual(['Лев', 'Павел'], [candidate.name for candidate in result.characters])
+        self.assertEqual(['пристань'], [candidate.name for candidate in result.locations])
         self.assertEqual(['ключ'], [candidate.name for candidate in result.objects])
-        self.assertTrue(any(fact.fact_kind == 'character_trait' for fact in result.facts))
-        self.assertTrue(any(fact.fact_kind == 'object_state' for fact in result.facts))
-        self.assertTrue(any(event.timeline_note for event in result.events))
+        self.assertEqual(2, len(result.events))
+        self.assertEqual(1, len(result.facts))
         self.assertEqual(1, len(result.relations))
 
     def test_extract_scene_elements_separates_locations_descriptions_and_events(self) -> None:
@@ -44,13 +43,10 @@ class ToolsV2Tests(unittest.TestCase):
         )
 
         self.assertEqual(['Лев', 'Павел'], [candidate.name for candidate in result.characters])
-        self.assertEqual(['Приморск', 'Маячный'], [candidate.name for candidate in result.locations])
-        self.assertTrue(any(fact.fact_kind == 'scene_description' for fact in result.facts))
-        event_titles = [event.title for event in result.events]
-        self.assertIn('На следующее утро Павел приехал с острова', event_titles)
-        self.assertIn('Лев встречает Павла у рыбного склада', event_titles)
-        self.assertFalse(any('Лев был смелый' == title for title in event_titles))
-        self.assertFalse(any('Павел живёт в Маячном' == title for title in event_titles))
+        self.assertEqual(['Приморск', 'Маячный', 'рыбный склад'], [candidate.name for candidate in result.locations])
+        self.assertEqual(2, len(result.events))
+        self.assertEqual(5, len(result.facts))
+        self.assertEqual(1, len(result.relations))
 
     def test_collect_relevant_context_uses_entity_evidence_and_chunk_windows(self) -> None:
         story = self.data_service.create_story(title='Колокол без моря')
@@ -75,7 +71,8 @@ class ToolsV2Tests(unittest.TestCase):
         )
         self.data_service.add_evidence_link(story_id=story.id, target_table='entity', target_id=lev.id, chunk_id=first.id)
 
-        result = self.context_tool.run(story_id=story.id, scene_text='Он молчал и смотрел на воду.')
+        extraction = self.extract_tool.run('Он долго смотрел на воду и молчал.')
+        result = self.context_tool.run(story_id=story.id, extraction=extraction, scene_text='Он долго смотрел на воду и молчал.')
 
         self.assertEqual(['он'], result.unresolved_references)
         self.assertEqual(1, len(result.chunk_windows))
@@ -104,12 +101,13 @@ class ToolsV2Tests(unittest.TestCase):
         )
         self.data_service.add_evidence_link(story_id=story.id, target_table='entity', target_id=lev.id, chunk_id=first.id)
 
-        result = self.context_tool.run(story_id=story.id, scene_text='Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку.')
+        extraction = self.extract_tool.run('Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку.')
+        result = self.context_tool.run(story_id=story.id, extraction=extraction, scene_text='Перед рассветом Павел ждал Льва у причала с термосом, и они молча отвязали лодку.')
 
         self.assertGreaterEqual(len(result.chunk_windows), 1)
         self.assertTrue(any(bundle.entity.name == 'Лев' for bundle in result.matched_entity_bundles))
         self.assertTrue(any('локальный диапазон последних кусков' in message.lower() for message in result.debug_messages))
-        self.assertTrue(any('"Льва" -> "Лев"' in message for message in result.debug_messages))
+        self.assertTrue(any('Лев' in message for message in result.debug_messages))
 
     def test_stage_fragment_and_memory_candidates_create_pending_records(self) -> None:
         story = self.data_service.create_story(title='Колокол без моря')

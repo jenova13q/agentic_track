@@ -9,13 +9,19 @@ from app.tools_v2 import CollectRelevantContextTool, ExtractSceneElementsTool, S
 
 
 class StoryConsistencyOrchestratorV2:
-    def __init__(self, data_service: StoryMemoryDataService | None = None, llm_adapter: LLMAdapterV2 | None = None) -> None:
+    def __init__(self, data_service: StoryMemoryDataService | None = None, llm_adapter: LLMAdapterV2 | None = None, extract_tool: ExtractSceneElementsTool | None = None) -> None:
         self.data_service = data_service or StoryMemoryDataService()
         self.llm_adapter = llm_adapter or LLMAdapterV2()
-        self.extract_tool = ExtractSceneElementsTool()
+        self.extract_tool = extract_tool or ExtractSceneElementsTool()
         self.context_tool = CollectRelevantContextTool(self.data_service)
         self.stage_fragment_tool = StageFragmentTool(self.data_service)
         self.stage_memory_tool = StageMemoryCandidatesTool(self.data_service)
+
+    def _recent_story_excerpt(self, story_id: str, limit: int = 4) -> str:
+        chunks = self.data_service.list_chunks(story_id)
+        if not chunks:
+            return ''
+        return '\n'.join(chunk.text for chunk in chunks[-limit:])
 
     def analyze_scene(self, story_id: str, scene_text: str, user_comment: str | None = None, bootstrap_mode: bool = False) -> AgentV2Result:
         has_existing_context = bool(
@@ -23,7 +29,7 @@ class StoryConsistencyOrchestratorV2:
             or self.data_service.list_entities(story_id, status='confirmed')
         )
         has_extracted_candidates = False
-        extraction = self.extract_tool.run(scene_text)
+        extraction = self.extract_tool.run(scene_text, recent_story_excerpt=self._recent_story_excerpt(story_id))
         has_extracted_candidates = bool(
             extraction.characters
             or extraction.locations
@@ -32,7 +38,7 @@ class StoryConsistencyOrchestratorV2:
             or extraction.facts
             or extraction.relations
         )
-        context = self.context_tool.run(story_id=story_id, scene_text='')
+        context = self.context_tool.run(story_id=story_id, extraction=extraction, scene_text='')
         step_count = 1
 
         while step_count <= 3:
@@ -43,7 +49,7 @@ class StoryConsistencyOrchestratorV2:
                 step_count=step_count,
             )
             if decision.action == 'collect_relevant_context':
-                context = self.context_tool.run(story_id=story_id, scene_text=scene_text)
+                context = self.context_tool.run(story_id=story_id, extraction=extraction, scene_text=scene_text)
                 step_count += 1
                 continue
             break

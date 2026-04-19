@@ -6,7 +6,7 @@ import logging
 import httpx
 
 from app.agent_v2.models import ConsistencyVerdict, OrchestratorDecision
-from app.agent_v2.prompts import NEXT_ACTION_SYSTEM_PROMPT, VERDICT_SYSTEM_PROMPT
+from app.llm_prompts import NEXT_ACTION_SYSTEM_PROMPT, VERDICT_SYSTEM_PROMPT
 from app.core.config import settings
 from app.tools_v2.contracts import ContextCollectionResult, ExtractionResult
 
@@ -233,3 +233,4 @@ class LLMAdapterV2:
             should_stage_update=should_stage_update,
             stop_reason='heuristic_verdict_complete',
         )
+

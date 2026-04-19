@@ -1,8 +1,8 @@
 ﻿from __future__ import annotations
 
 from app.storage.service import StoryMemoryDataService
-from app.tools_v2.contracts import ContextCollectionResult
-from app.tools_v2.helpers import canonicalize, entity_lookup_key, extract_names, extract_pronouns, extract_scene_candidates
+from app.tools_v2.contracts import ContextCollectionResult, ExtractionResult
+from app.tools_v2.helpers import canonicalize, entity_lookup_key
 
 
 class CollectRelevantContextTool:
@@ -22,10 +22,9 @@ class CollectRelevantContextTool:
                 return entity
         return None
 
-    def run(self, story_id: str, scene_text: str) -> ContextCollectionResult:
-        names = extract_names(scene_text)
-        pronouns = extract_pronouns(scene_text)
-        extraction = extract_scene_candidates(scene_text)
+    def run(self, story_id: str, extraction: ExtractionResult, scene_text: str = '') -> ContextCollectionResult:
+        names = [candidate.name for candidate in extraction.characters]
+        pronouns = extraction.unresolved_references
         matched_entity_bundles = []
         seen_entity_ids: set[str] = set()
         chunk_windows = []
@@ -41,7 +40,7 @@ class CollectRelevantContextTool:
                 debug_messages.append('Подтянут локальный диапазон последних кусков текста для базового контекста.')
 
         for name in names:
-            entity = self._find_matching_entity(story_id=story_id, name=name)
+            entity = self._find_matching_entity(story_id=story_id, name=name, entity_kind='character')
             if entity is None or entity.id in seen_entity_ids:
                 continue
             seen_entity_ids.add(entity.id)
@@ -58,8 +57,8 @@ class CollectRelevantContextTool:
                         seen_chunk_ids.add(window.center.id)
                         chunk_windows.append(window)
 
-        for candidate in extraction.objects:
-            entity = self._find_matching_entity(story_id=story_id, name=candidate.name, entity_kind='object')
+        for candidate in extraction.locations + extraction.objects:
+            entity = self._find_matching_entity(story_id=story_id, name=candidate.name, entity_kind=candidate.kind)
             if entity is None or entity.id in seen_entity_ids:
                 continue
             seen_entity_ids.add(entity.id)

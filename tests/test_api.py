@@ -9,6 +9,8 @@ from app.api import routes
 from app.main import app
 from app.observability.service import ObservabilityStore
 from app.storage import Database, StoryMemoryDataService
+from app.tools_v2 import ExtractSceneElementsTool
+from tests.fake_extraction import FakeSceneExtractionBackend
 
 
 class StoryApiTests(unittest.TestCase):
@@ -19,7 +21,8 @@ class StoryApiTests(unittest.TestCase):
         self.observability = ObservabilityStore(base_dir=Path(self.temp_dir.name) / 'telemetry')
         self.adapter = LLMAdapterV2()
         self.adapter.api_key = None
-        self.orchestrator = StoryConsistencyOrchestratorV2(data_service=self.data_service, llm_adapter=self.adapter)
+        self.extract_tool = ExtractSceneElementsTool(backend=FakeSceneExtractionBackend())
+        self.orchestrator = StoryConsistencyOrchestratorV2(data_service=self.data_service, llm_adapter=self.adapter, extract_tool=self.extract_tool)
         routes.data_service = self.data_service
         routes.orchestrator_v2 = self.orchestrator
         routes.observability = self.observability
@@ -137,6 +140,42 @@ class StoryApiTests(unittest.TestCase):
         self.assertIsNone(payload['staged_update_id'])
         self.assertEqual('internal_character_conflict', payload['stop_reason'])
         self.assertIn('debug', payload)
+
+    def test_story_flow_e2e_preserves_entities_and_detects_character_conflict(self) -> None:
+        ingest = self.client.post(
+            '/stories/ingest',
+            json={
+                'title': 'Колокол без моря',
+                'text': 'К вечеру Приморск всегда становился похож на плохо вытертое зеркало. Лев живёт в Приморске. Лев был смелый. На следующее утро Павел приехал с острова. Павел живёт в Маячном. Павел был добрый. Лев встречает Павла у рыбного склада.',
+            },
+        )
+        self.assertEqual(200, ingest.status_code)
+        ingest_payload = ingest.json()
+        self.assertEqual(2, ingest_payload['extracted_counts']['characters'])
+        self.assertEqual(3, ingest_payload['extracted_counts']['locations'])
+        self.assertEqual(2, ingest_payload['extracted_counts']['events'])
+        self.assertEqual(5, ingest_payload['extracted_counts']['facts'])
+        self.assertEqual(1, ingest_payload['extracted_counts']['relations'])
+        self.assertEqual(['Лев', 'Павел'], [item['name'] for item in ingest_payload['debug']['extraction']['characters']])
+        self.assertEqual(['Приморск', 'Маячный', 'рыбный склад'], [item['name'] for item in ingest_payload['debug']['extraction']['locations']])
+
+        story_id = ingest_payload['story_id']
+        update_id = ingest_payload['pending_update_id']
+        confirm = self.client.post(f'/stories/{story_id}/pending-updates/{update_id}/confirm')
+        self.assertEqual(200, confirm.status_code)
+
+        analyze = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Лев был смелый. Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту.'},
+        )
+        self.assertEqual(200, analyze.status_code)
+        analyze_payload = analyze.json()
+        self.assertEqual('conflict', analyze_payload['status'])
+        self.assertEqual('character', analyze_payload['issue_type'])
+        matched = analyze_payload['debug']['context']['matched_entities']
+        self.assertTrue(any(item['name'] == 'Лев' for item in matched))
+        self.assertEqual(['Лев'], [item['name'] for item in analyze_payload['debug']['extraction']['characters']])
+        self.assertEqual(2, analyze_payload['extracted_counts']['facts'])
 
     def test_confirm_pending_update_promotes_fragment_and_memory(self) -> None:
         ingest = self.client.post(
