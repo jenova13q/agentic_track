@@ -62,7 +62,7 @@ class StoryApiTests(unittest.TestCase):
         story = self.client.get(f"/stories/{payload['story_id']}").json()
         self.assertEqual(1, story['pending_fragment_count'])
         self.assertEqual(1, len(story['pending_updates']))
-        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story['draft_text'])
+        self.assertEqual('', story['draft_text'])
 
     def test_ingest_bootstraps_initial_story_even_with_pronouns(self) -> None:
         response = self.client.post(
@@ -200,6 +200,50 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual(0, story['pending_fragment_count'])
         self.assertEqual(0, len([item for item in story['pending_updates'] if item['status'] == 'pending']))
         self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story['draft_text'])
+
+    def test_rejected_pending_scene_does_not_affect_future_analysis_or_draft(self) -> None:
+        ingest = self.client.post(
+            '/stories/ingest',
+            json={
+                'title': 'Колокол без моря',
+                'text': 'Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.',
+            },
+        )
+        story_id = ingest.json()['story_id']
+        base_update_id = ingest.json()['pending_update_id']
+        self.client.post(f'/stories/{story_id}/pending-updates/{base_update_id}/confirm')
+
+        pending = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'На острове Лев вынул ключ из кармана и открыл дверь.'},
+        )
+        self.assertEqual(200, pending.status_code)
+        pending_payload = pending.json()
+        self.assertEqual('conflict', pending_payload['status'])
+        self.assertIsNone(pending_payload['staged_update_id'])
+
+        story = self.client.get(f'/stories/{story_id}').json()
+        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story['draft_text'])
+
+        pending_scene = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Павел принёс колокол с острова.'},
+        ).json()
+        pending_update_id = pending_scene['staged_update_id']
+        self.assertIsNotNone(pending_update_id)
+        self.client.post(f'/stories/{story_id}/pending-updates/{pending_update_id}/reject')
+
+        story_after_reject = self.client.get(f'/stories/{story_id}').json()
+        self.assertEqual('Лев встретил Павла у пристани. Перед отплытием Лев потерял ключ.', story_after_reject['draft_text'])
+
+        analyze = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Павел принёс колокол с острова.'},
+        )
+        self.assertEqual(200, analyze.status_code)
+        analyze_payload = analyze.json()
+        self.assertEqual('no_conflict', analyze_payload['status'])
+        self.assertIsNotNone(analyze_payload['staged_update_id'])
 
     def test_reject_pending_update_marks_it_rejected(self) -> None:
         ingest = self.client.post(

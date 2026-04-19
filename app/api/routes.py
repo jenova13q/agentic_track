@@ -124,7 +124,7 @@ def get_story(story_id: str) -> StoryResponseV2:
     return StoryResponseV2(
         story_id=story.id,
         title=story.title,
-        draft_text=data_service.compose_story_text(story.id, include_pending=True),
+        draft_text=data_service.compose_story_text(story.id, include_pending=False),
         confirmed_fragment_count=len(data_service.list_fragments(story.id, status='confirmed')),
         pending_fragment_count=len(data_service.list_fragments(story.id, status='pending')),
         total_chunk_count=len(data_service.list_chunks(story.id)),

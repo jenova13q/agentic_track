@@ -260,16 +260,16 @@ class StoryMemoryRepository:
         if entity is None:
             return None
         event_rows = self.connection.execute(
-            "SELECT ev.id, ev.story_id, ev.title, ev.summary, ev.timeline_note, ev.anchor_event_id, ev.temporal_relation, ev.sequence_hint, ev.fragment_id, ev.status, ev.confidence, ev.created_at, ev.updated_at, ev.attributes_json FROM event_entities ee JOIN events ev ON ev.id = ee.event_id WHERE ee.entity_id = ? ORDER BY ev.created_at",
+            "SELECT ev.id, ev.story_id, ev.title, ev.summary, ev.timeline_note, ev.anchor_event_id, ev.temporal_relation, ev.sequence_hint, ev.fragment_id, ev.status, ev.confidence, ev.created_at, ev.updated_at, ev.attributes_json FROM event_entities ee JOIN events ev ON ev.id = ee.event_id WHERE ee.entity_id = ? AND ev.status = 'confirmed' ORDER BY ev.created_at",
             (entity_id,),
         ).fetchall()
         return EntityBundle(
             entity=entity,
             character_profile=self.get_character_profile(entity_id) if entity.entity_kind == 'character' else None,
             object_profile=self.get_object_profile(entity_id) if entity.entity_kind == 'object' else None,
-            facts=self.list_facts_for_entity(entity_id),
+            facts=self.list_facts_for_entity(entity_id, status='confirmed'),
             events=[row_to_model(EventRecord, row) for row in event_rows],
-            relations=self.list_relations_for_entity(entity_id),
+            relations=self.list_relations_for_entity(entity_id, status='confirmed'),
             evidence_links=self.list_evidence_for_target('entity', entity_id),
         )
 
@@ -278,7 +278,7 @@ class StoryMemoryRepository:
         if event is None:
             return None
         fact_rows = self.connection.execute(
-            "SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE event_id = ? OR timeline_event_id = ? ORDER BY created_at",
+            "SELECT id, story_id, fact_kind, summary, subject_entity_id, object_entity_id, event_id, timeline_event_id, valid_from_event_id, valid_to_event_id, status, confidence, created_at, updated_at, attributes_json FROM facts WHERE (event_id = ? OR timeline_event_id = ?) AND status = 'confirmed' ORDER BY created_at",
             (event_id, event_id),
         ).fetchall()
         return EventBundle(

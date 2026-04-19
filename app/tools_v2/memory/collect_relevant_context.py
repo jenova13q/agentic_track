@@ -12,12 +12,11 @@ class CollectRelevantContextTool:
         self.data_service = data_service or StoryMemoryDataService()
 
     def _find_matching_entity(self, story_id: str, name: str, entity_kind: str | None = None):
-        exact = self.data_service.find_entity_by_name(story_id=story_id, canonical_name=canonicalize(name), entity_kind=entity_kind)
-        if exact is not None:
-            return exact
-
         lookup_key = entity_lookup_key(name)
+        exact_canonical = canonicalize(name)
         for entity in self.data_service.list_entities(story_id=story_id, entity_kind=entity_kind, status='confirmed'):
+            if entity.canonical_name == exact_canonical:
+                return entity
             if entity_lookup_key(entity.name) == lookup_key or entity_lookup_key(entity.canonical_name) == lookup_key:
                 return entity
         return None
