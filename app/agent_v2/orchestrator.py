@@ -60,6 +60,7 @@ class StoryConsistencyOrchestratorV2:
             issue_type=verdict.issue_type,
             explanation=verdict.explanation,
             confidence=verdict.confidence,
+            stop_reason=verdict.stop_reason,
             extraction=extraction,
             context=context,
             staged_update_id=staged_update_id,

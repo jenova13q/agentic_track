@@ -86,6 +86,20 @@ class StoryApiTests(unittest.TestCase):
         self.assertEqual('object', payload['issue_type'])
         self.assertIsNone(payload['staged_update_id'])
 
+    def test_analyze_scene_detects_internal_character_conflict(self) -> None:
+        story_id = self._create_empty_story()
+
+        response = self.client.post(
+            f'/stories/{story_id}/analyze',
+            json={'scene_text': 'Лев был смелый. Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту.'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual('conflict', payload['status'])
+        self.assertEqual('character', payload['issue_type'])
+        self.assertIsNone(payload['staged_update_id'])
+
     def test_confirm_pending_update_promotes_fragment_and_memory(self) -> None:
         ingest = self.client.post(
             '/stories/ingest',

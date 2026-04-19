@@ -50,8 +50,13 @@ function renderStories() {
 function renderMessage(title, payload) {
   const article = document.createElement("article");
   article.className = "message";
+  const extractedCounts = payload.extracted_counts || {};
+  const stagedCounts = payload.staged_item_counts || {};
   const extracted = payload.extracted_counts
-    ? `extracted: chars ${payload.extracted_counts.characters || 0}, objects ${payload.extracted_counts.objects || 0}, events ${payload.extracted_counts.events || 0}, facts ${payload.extracted_counts.facts || 0}`
+    ? `Найдено: персонажей ${extractedCounts.characters || 0}, предметов ${extractedCounts.objects || 0}, событий ${extractedCounts.events || 0}, фактов ${extractedCounts.facts || 0}, связей ${extractedCounts.relations || 0}`
+    : "";
+  const staged = payload.staged_update_id
+    ? `Подготовлено к сохранению: персонажей ${stagedCounts.entities || 0}, событий ${stagedCounts.events || 0}, фактов ${stagedCounts.facts || 0}, связей ${stagedCounts.relations || 0}`
     : "";
   article.innerHTML = `
     <div class="meta">${title}</div>
@@ -59,7 +64,8 @@ function renderMessage(title, payload) {
     <p>${payload.explanation || ""}</p>
     <div class="muted">mode: ${payload.orchestrator_mode || "n/a"} · steps: ${payload.step_count || 0}</div>
     <div class="muted">${extracted}</div>
-    <div class="muted">staged update: ${payload.staged_update_id || payload.pending_update_id || "n/a"}</div>
+    <div class="muted">${staged}</div>
+    <div class="muted">pending update: ${payload.staged_update_id || payload.pending_update_id || "n/a"}</div>
   `;
   el.messages.prepend(article);
 }

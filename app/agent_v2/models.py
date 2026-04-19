@@ -32,6 +32,7 @@ class AgentV2Result:
     issue_type: IssueType
     explanation: str
     confidence: float
+    stop_reason: str
     extraction: ExtractionResult
     context: ContextCollectionResult
     staged_update_id: str | None = None

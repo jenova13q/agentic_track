@@ -102,6 +102,19 @@ class AgentV2Tests(unittest.TestCase):
         self.assertEqual('uncertain', result.status)
         self.assertIsNone(result.staged_update_id)
 
+    def test_orchestrator_v2_detects_internal_character_conflict_in_same_fragment(self) -> None:
+        story = self.data_service.create_story(title='Колокол без моря')
+
+        result = self.orchestrator.analyze_scene(
+            story_id=story.id,
+            scene_text='Лев был смелый. Перед выходом к воде Лев был трусливый и боялся даже посмотреть на бухту.',
+        )
+
+        self.assertEqual('conflict', result.status)
+        self.assertEqual('character', result.issue_type)
+        self.assertEqual('internal_character_conflict', result.stop_reason)
+        self.assertIsNone(result.staged_update_id)
+
 
 if __name__ == '__main__':
     unittest.main()

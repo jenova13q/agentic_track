@@ -148,6 +148,24 @@ class LLMAdapterV2:
         return OrchestratorDecision(action='finish', rationale='enough_local_structure')
 
     def _fallback_verdict(self, *, extraction: ExtractionResult, context: ContextCollectionResult) -> ConsistencyVerdict:
+        trait_facts_by_subject: dict[str, list[str]] = {}
+        for fact in extraction.facts:
+            if fact.fact_kind != 'character_trait' or not fact.subject_name:
+                continue
+            trait_facts_by_subject.setdefault(fact.subject_name.lower(), []).append(fact.summary.lower())
+
+        for subject_name, summaries in trait_facts_by_subject.items():
+            for trait, opposite in OPPOSITE_TRAITS.items():
+                if any(trait in summary for summary in summaries) and any(opposite in summary for summary in summaries):
+                    return ConsistencyVerdict(
+                        status='conflict',
+                        issue_type='character',
+                        explanation=f'Найден character conflict: в новом фрагменте персонаж {subject_name.capitalize()} одновременно описан противоположными чертами.',
+                        confidence=0.83,
+                        should_stage_update=False,
+                        stop_reason='internal_character_conflict',
+                    )
+
         if extraction.unresolved_references and not context.chunk_windows:
             return ConsistencyVerdict(
                 status='uncertain',
