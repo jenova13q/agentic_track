@@ -30,9 +30,9 @@ class CollectRelevantContextTool:
         seen_chunk_ids: set[str] = set()
         debug_messages: list[str] = []
 
-        chunks = self.data_service.list_chunks(story_id)
+        chunks = self.data_service.list_chunks(story_id, fragment_status='confirmed')
         if scene_text and chunks:
-            fallback_window = self.data_service.get_chunk_window(chunks[-1].id, before=3, after=0)
+            fallback_window = self.data_service.get_chunk_window(chunks[-1].id, before=3, after=0, fragment_status='confirmed')
             if fallback_window is not None and fallback_window.center.id not in seen_chunk_ids:
                 seen_chunk_ids.add(fallback_window.center.id)
                 chunk_windows.append(fallback_window)
@@ -51,7 +51,7 @@ class CollectRelevantContextTool:
                     debug_messages.append(f'Найдено совпадение в памяти: {bundle.entity.entity_kind} "{bundle.entity.name}"')
                 matched_entity_bundles.append(bundle)
                 for evidence in bundle.evidence_links[:1]:
-                    window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1)
+                    window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1, fragment_status='confirmed')
                     if window is not None and window.center.id not in seen_chunk_ids:
                         seen_chunk_ids.add(window.center.id)
                         chunk_windows.append(window)
@@ -66,7 +66,7 @@ class CollectRelevantContextTool:
                 debug_messages.append(f'Найдено совпадение в памяти: {bundle.entity.entity_kind} "{bundle.entity.name}"')
                 matched_entity_bundles.append(bundle)
                 for evidence in bundle.evidence_links[:1]:
-                    window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1)
+                    window = self.data_service.get_chunk_window(evidence.chunk_id, before=2, after=1, fragment_status='confirmed')
                     if window is not None and window.center.id not in seen_chunk_ids:
                         seen_chunk_ids.add(window.center.id)
                         chunk_windows.append(window)

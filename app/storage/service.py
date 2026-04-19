@@ -132,10 +132,10 @@ class StoryMemoryDataService:
         finally:
             connection.close()
 
-    def get_chunk_window(self, chunk_id: str, before: int = 2, after: int = 1) -> ChunkWindow | None:
+    def get_chunk_window(self, chunk_id: str, before: int = 2, after: int = 1, fragment_status: str | None = None) -> ChunkWindow | None:
         connection, story_repo, _ = self._repos()
         try:
-            result = story_repo.get_chunk_window(chunk_id, before=before, after=after)
+            result = story_repo.get_chunk_window(chunk_id, before=before, after=after, fragment_status=fragment_status)
             if result is None:
                 return None
             center, previous_chunks, next_chunks = result
@@ -205,10 +205,10 @@ class StoryMemoryDataService:
         visible_fragments.sort(key=lambda fragment: (fragment.fragment_order is None, fragment.fragment_order or 0, fragment.created_at, fragment.id))
         return '\n\n'.join(fragment.text.strip() for fragment in visible_fragments if fragment.text.strip())
 
-    def list_chunks(self, story_id: str):
+    def list_chunks(self, story_id: str, fragment_status: str | None = None):
         connection, story_repo, _ = self._repos()
         try:
-            return story_repo.list_chunks(story_id=story_id)
+            return story_repo.list_chunks(story_id=story_id, fragment_status=fragment_status)
         finally:
             connection.close()
 

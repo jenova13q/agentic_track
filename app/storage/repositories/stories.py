@@ -140,41 +140,77 @@ class StoryRepository:
         ).fetchone()
         return row_to_model(ChunkRecord, row) if row else None
 
-    def list_chunks(self, story_id: str) -> list[ChunkRecord]:
-        rows = self.connection.execute(
-            """
-            SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
-            FROM story_chunks WHERE story_id = ?
-            ORDER BY chunk_index
-            """,
-            (story_id,),
-        ).fetchall()
+    def list_chunks(self, story_id: str, fragment_status: str | None = None) -> list[ChunkRecord]:
+        if fragment_status is None:
+            rows = self.connection.execute(
+                """
+                SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
+                FROM story_chunks WHERE story_id = ?
+                ORDER BY chunk_index
+                """,
+                (story_id,),
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                """
+                SELECT sc.id, sc.story_id, sc.fragment_id, sc.chunk_index, sc.source_ref, sc.text, sc.token_count, sc.created_at
+                FROM story_chunks sc
+                JOIN story_fragments sf ON sf.id = sc.fragment_id
+                WHERE sc.story_id = ? AND sf.status = ?
+                ORDER BY sc.chunk_index
+                """,
+                (story_id, fragment_status),
+            ).fetchall()
         return [row_to_model(ChunkRecord, row) for row in rows]
 
-    def get_chunk_window(self, chunk_id: str, before: int = 2, after: int = 1) -> tuple[ChunkRecord, list[ChunkRecord], list[ChunkRecord]] | None:
+    def get_chunk_window(self, chunk_id: str, before: int = 2, after: int = 1, fragment_status: str | None = None) -> tuple[ChunkRecord, list[ChunkRecord], list[ChunkRecord]] | None:
         center = self.get_chunk(chunk_id)
         if center is None:
             return None
-        previous_rows = self.connection.execute(
-            """
-            SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
-            FROM story_chunks
-            WHERE story_id = ? AND chunk_index < ?
-            ORDER BY chunk_index DESC
-            LIMIT ?
-            """,
-            (center.story_id, center.chunk_index, before),
-        ).fetchall()
-        next_rows = self.connection.execute(
-            """
-            SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
-            FROM story_chunks
-            WHERE story_id = ? AND chunk_index > ?
-            ORDER BY chunk_index ASC
-            LIMIT ?
-            """,
-            (center.story_id, center.chunk_index, after),
-        ).fetchall()
+        if fragment_status is None:
+            previous_rows = self.connection.execute(
+                """
+                SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
+                FROM story_chunks
+                WHERE story_id = ? AND chunk_index < ?
+                ORDER BY chunk_index DESC
+                LIMIT ?
+                """,
+                (center.story_id, center.chunk_index, before),
+            ).fetchall()
+            next_rows = self.connection.execute(
+                """
+                SELECT id, story_id, fragment_id, chunk_index, source_ref, text, token_count, created_at
+                FROM story_chunks
+                WHERE story_id = ? AND chunk_index > ?
+                ORDER BY chunk_index ASC
+                LIMIT ?
+                """,
+                (center.story_id, center.chunk_index, after),
+            ).fetchall()
+        else:
+            previous_rows = self.connection.execute(
+                """
+                SELECT sc.id, sc.story_id, sc.fragment_id, sc.chunk_index, sc.source_ref, sc.text, sc.token_count, sc.created_at
+                FROM story_chunks sc
+                JOIN story_fragments sf ON sf.id = sc.fragment_id
+                WHERE sc.story_id = ? AND sc.chunk_index < ? AND sf.status = ?
+                ORDER BY sc.chunk_index DESC
+                LIMIT ?
+                """,
+                (center.story_id, center.chunk_index, fragment_status, before),
+            ).fetchall()
+            next_rows = self.connection.execute(
+                """
+                SELECT sc.id, sc.story_id, sc.fragment_id, sc.chunk_index, sc.source_ref, sc.text, sc.token_count, sc.created_at
+                FROM story_chunks sc
+                JOIN story_fragments sf ON sf.id = sc.fragment_id
+                WHERE sc.story_id = ? AND sc.chunk_index > ? AND sf.status = ?
+                ORDER BY sc.chunk_index ASC
+                LIMIT ?
+                """,
+                (center.story_id, center.chunk_index, fragment_status, after),
+            ).fetchall()
         previous_chunks = [row_to_model(ChunkRecord, row) for row in reversed(previous_rows)]
         next_chunks = [row_to_model(ChunkRecord, row) for row in next_rows]
         return center, previous_chunks, next_chunks

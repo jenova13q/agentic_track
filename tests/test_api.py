@@ -244,6 +244,12 @@ class StoryApiTests(unittest.TestCase):
         analyze_payload = analyze.json()
         self.assertEqual('no_conflict', analyze_payload['status'])
         self.assertIsNotNone(analyze_payload['staged_update_id'])
+        chunk_texts = []
+        for window in analyze_payload['debug']['context']['chunk_windows']:
+            chunk_texts.extend(window.get('previous', []))
+            chunk_texts.append(window.get('center', ''))
+            chunk_texts.extend(window.get('next', []))
+        self.assertFalse(any('Павел принёс колокол с острова.' in text for text in chunk_texts))
 
     def test_reject_pending_update_marks_it_rejected(self) -> None:
         ingest = self.client.post(
