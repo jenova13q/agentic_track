@@ -9,6 +9,7 @@ OBJECT_ACTION_RE = re.compile(r"\b(потерял|потеряла|вынул|в
 TRAIT_RE = re.compile(r"\b([А-ЯЁ][а-яё]+)\s+(?:был|была|казался|казалась|оставался|оставалась)\s+([а-яё-]+(?:\s+[а-яё-]+)*)", re.IGNORECASE)
 LIVE_RE = re.compile(r"\b([А-ЯЁ][а-яё]+)\s+(?:жив[её]т|жил|жила)\s+в\s+([А-ЯЁ][а-яё-]+)\b", re.IGNORECASE)
 MEETING_RE = re.compile(r"\b([А-ЯЁ][а-яё]+)\s+(?:встретил|встретила|встречает)\s+([А-ЯЁ][а-яё]+)\b", re.IGNORECASE)
+ARRIVAL_RE = re.compile(r"\b([А-ЯЁ][а-яё]+)\s+(?:приехал|приехала|пришел|пришла|вернулся|вернулась|ждал|ждала|стоял|стояла|смотрел|смотрела|слушал|слушала|молчал|молчала|ответил|ответила)\b", re.IGNORECASE)
 
 STOP_NAMES = {"К", "В", "И", "На", "По", "Но", "Он", "Она", "Они", "Это", "Тем", "Перед", "После"}
 
@@ -23,6 +24,24 @@ def entity_lookup_key(text: str) -> str:
     value = re.sub(r"(ом|ем|ой|ей|ою|ею|ами|ями|ах|ях|ам|ям|у|ю|а|я|е|ы|и)$", "", value)
     value = re.sub(r"[аеёиоуыэюя]", "", value)
     return value or canonicalize(text)
+
+
+def normalize_location_name(text: str) -> str:
+    value = text.strip()
+    lowered = value.lower()
+    if lowered.endswith("ске"):
+        return value[:-1]
+    if lowered.endswith("цке"):
+        return value[:-1]
+    if lowered.endswith("ном"):
+        return value[:-2] + "ый"
+    if lowered.endswith("ем"):
+        return value[:-2]
+    if lowered.endswith("ом") and len(value) > 4:
+        return value[:-2] + "ый"
+    if lowered.endswith("е") and len(value) > 5:
+        return value[:-1]
+    return value
 
 
 def split_sentences(text: str) -> list[str]:

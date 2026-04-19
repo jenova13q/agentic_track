@@ -35,6 +35,23 @@ class ToolsV2Tests(unittest.TestCase):
         self.assertTrue(any(event.timeline_note for event in result.events))
         self.assertEqual(1, len(result.relations))
 
+    def test_extract_scene_elements_separates_locations_descriptions_and_events(self) -> None:
+        result = self.extract_tool.run(
+            'К вечеру Приморск всегда становился похож на плохо вытертое зеркало. '
+            'Лев живёт в Приморске. Лев был смелый. '
+            'На следующее утро Павел приехал с острова. Павел живёт в Маячном. '
+            'Павел был добрый. Лев встречает Павла у рыбного склада.'
+        )
+
+        self.assertEqual(['Лев', 'Павел'], [candidate.name for candidate in result.characters])
+        self.assertEqual(['Приморск', 'Маячный'], [candidate.name for candidate in result.locations])
+        self.assertTrue(any(fact.fact_kind == 'scene_description' for fact in result.facts))
+        event_titles = [event.title for event in result.events]
+        self.assertIn('На следующее утро Павел приехал с острова', event_titles)
+        self.assertIn('Лев встречает Павла у рыбного склада', event_titles)
+        self.assertFalse(any('Лев был смелый' == title for title in event_titles))
+        self.assertFalse(any('Павел живёт в Маячном' == title for title in event_titles))
+
     def test_collect_relevant_context_uses_entity_evidence_and_chunk_windows(self) -> None:
         story = self.data_service.create_story(title='Колокол без моря')
         fragment = self.data_service.add_fragment(

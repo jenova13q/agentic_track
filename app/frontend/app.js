@@ -61,7 +61,7 @@ function renderMessage(title, payload) {
   const debugMessages = payload.debug?.messages || [];
   const debugJson = payload.debug ? JSON.stringify(payload.debug, null, 2) : "";
   const extracted = payload.extracted_counts
-    ? `Найдено: персонажей ${extractedCounts.characters || 0}, предметов ${extractedCounts.objects || 0}, событий ${extractedCounts.events || 0}, фактов ${extractedCounts.facts || 0}, связей ${extractedCounts.relations || 0}`
+    ? `Найдено: персонажей ${extractedCounts.characters || 0}, мест ${extractedCounts.locations || 0}, предметов ${extractedCounts.objects || 0}, событий ${extractedCounts.events || 0}, фактов ${extractedCounts.facts || 0}, связей ${extractedCounts.relations || 0}`
     : "";
   const staged = payload.staged_update_id
     ? `Подготовлено к сохранению: персонажей ${stagedCounts.entities || 0}, событий ${stagedCounts.events || 0}, фактов ${stagedCounts.facts || 0}, связей ${stagedCounts.relations || 0}`

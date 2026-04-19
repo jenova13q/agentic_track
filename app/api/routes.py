@@ -79,6 +79,7 @@ def ingest_story(payload: IngestStoryRequest, request: Request) -> IngestStoryRe
         stop_reason=result.stop_reason,
         extracted_counts={
             'characters': len(result.extraction.characters),
+            'locations': len(result.extraction.locations),
             'objects': len(result.extraction.objects),
             'events': len(result.extraction.events),
             'facts': len(result.extraction.facts),
@@ -171,6 +172,7 @@ def analyze_scene(story_id: str, payload: AnalyzeSceneRequest, request: Request)
         staged_item_counts=result.staged_item_counts,
         extracted_counts={
             'characters': len(result.extraction.characters),
+            'locations': len(result.extraction.locations),
             'objects': len(result.extraction.objects),
             'events': len(result.extraction.events),
             'facts': len(result.extraction.facts),

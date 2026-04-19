@@ -44,6 +44,7 @@ class SceneRelationCandidate:
 @dataclass(slots=True)
 class ExtractionResult:
     characters: list[SceneEntityCandidate] = field(default_factory=list)
+    locations: list[SceneEntityCandidate] = field(default_factory=list)
     objects: list[SceneEntityCandidate] = field(default_factory=list)
     events: list[SceneEventCandidate] = field(default_factory=list)
     facts: list[SceneFactCandidate] = field(default_factory=list)

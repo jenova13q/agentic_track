@@ -26,6 +26,7 @@ class StoryConsistencyOrchestratorV2:
         extraction = self.extract_tool.run(scene_text)
         has_extracted_candidates = bool(
             extraction.characters
+            or extraction.locations
             or extraction.objects
             or extraction.events
             or extraction.facts
@@ -61,7 +62,7 @@ class StoryConsistencyOrchestratorV2:
         staged_fragment_id = None
         staged_item_counts: dict[str, int] = {}
         debug_messages = [
-            f'Извлечён новый фрагмент: персонажей {len(extraction.characters)}, объектов {len(extraction.objects)}, событий {len(extraction.events)}, фактов {len(extraction.facts)}, связей {len(extraction.relations)}',
+            f'Извлечён новый фрагмент: персонажей {len(extraction.characters)}, мест {len(extraction.locations)}, объектов {len(extraction.objects)}, событий {len(extraction.events)}, фактов {len(extraction.facts)}, связей {len(extraction.relations)}',
         ]
         debug_messages.extend(context.debug_messages)
         staged_debug_messages: list[str] = []
@@ -91,6 +92,7 @@ class StoryConsistencyOrchestratorV2:
             'extraction': {
                 'scene_summary': extraction.scene_summary,
                 'characters': [asdict(candidate) for candidate in extraction.characters],
+                'locations': [asdict(candidate) for candidate in extraction.locations],
                 'objects': [asdict(candidate) for candidate in extraction.objects],
                 'events': [asdict(event) for event in extraction.events],
                 'facts': [asdict(fact) for fact in extraction.facts],

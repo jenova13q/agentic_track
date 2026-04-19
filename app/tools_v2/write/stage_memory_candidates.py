@@ -7,6 +7,18 @@ from app.tools_v2.helpers import canonicalize, entity_lookup_key
 
 class StageMemoryCandidatesTool:
     name = 'stage_memory_candidates'
+    KIND_LABELS = {
+        'character': 'персонаж',
+        'object': 'предмет',
+        'location': 'место',
+    }
+
+    FACT_LABELS = {
+        'character_trait': 'черта персонажа',
+        'location': 'факт о месте',
+        'object_state': 'состояние предмета',
+        'scene_description': 'описание сцены',
+    }
 
     def __init__(self, data_service: StoryMemoryDataService | None = None) -> None:
         self.data_service = data_service or StoryMemoryDataService()
@@ -41,7 +53,7 @@ class StageMemoryCandidatesTool:
         created_relation_ids: list[str] = []
         entity_ids_by_name: dict[str, str] = {}
 
-        for candidate in extraction.characters + extraction.objects:
+        for candidate in extraction.characters + extraction.locations + extraction.objects:
             existing = self._find_existing_entity(
                 story_id=story_id,
                 candidate_name=candidate.name,
@@ -50,7 +62,7 @@ class StageMemoryCandidatesTool:
             )
             if existing is not None:
                 entity_ids_by_name[candidate.name] = existing.id
-                debug_messages.append(f'Найден уже имеющийся {candidate.kind}: "{candidate.name}"')
+                debug_messages.append(f'Найдена уже имеющаяся сущность ({self.KIND_LABELS.get(candidate.kind, candidate.kind)}): "{candidate.name}"')
                 continue
             created = self.data_service.create_entity(
                 story_id=story_id,
@@ -63,7 +75,7 @@ class StageMemoryCandidatesTool:
             )
             entity_ids_by_name[candidate.name] = created.id
             created_entity_ids.append(created.id)
-            debug_messages.append(f'Найден новый {candidate.kind}: "{candidate.name}"')
+            debug_messages.append(f'Найдена новая сущность ({self.KIND_LABELS.get(candidate.kind, candidate.kind)}): "{candidate.name}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='entity',
@@ -120,7 +132,7 @@ class StageMemoryCandidatesTool:
                 confidence=0.56,
             )
             created_fact_ids.append(created_fact.id)
-            debug_messages.append(f'Найден новый факт: "{fact.summary}"')
+            debug_messages.append(f'Найден {self.FACT_LABELS.get(fact.fact_kind, "факт")}: "{fact.summary}"')
             self.data_service.add_pending_update_item(
                 pending_update_id=pending_update.id,
                 item_type='fact',
